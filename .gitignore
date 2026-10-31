@@ -1,0 +1,13 @@
+node_modules/
+runtime/
+dist/
+evidence/
+tools/local-integration/
+*.exe
+*.lnk
+*.log
+.env*
+*.pem
+*.key
+Thumbs.db
+.DS_Store

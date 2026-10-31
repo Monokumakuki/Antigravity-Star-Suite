@@ -1,0 +1,130 @@
+// Serialized into the host by its existing local CDP endpoint. No app files are modified.
+async function installTheme(config){
+ const key="__agyDreamSkinV2";
+ if(window[key]){if(window[key].owner!==config.owner)throw new Error("皮肤由另一个运行实例管理");if(window[key].status().applied){window[key].update(config);return window[key].status();}window[key].destroy();}
+ const root=document.querySelector("#root")||document.querySelector("#app");
+ if(!root)return{applied:false,reason:"unsupported-root"};
+ const image=new Image();image.src=config.image;await image.decode();
+ if(!root.isConnected)return{applied:false,reason:"detached-root"};
+ const saved=[],seen=new WeakSet();
+ const protect=".monaco-editor,.cm-editor,.xterm,.integrated-terminal,textarea,pre,code,[contenteditable=true],[role=dialog],[role=menu],[role=listbox],[role=article],.prose,.markdown-body";
+ const layer=document.createElement("div");layer.id="agy-dream-wallpaper-v2";layer.setAttribute("aria-hidden","true");
+ Object.assign(layer.style,{position:"fixed",inset:"0",zIndex:"0",pointerEvents:"none",backgroundRepeat:"no-repeat",backgroundPosition:"center",backgroundColor:"#f8f6ff"});
+ const style=document.createElement("style");style.id="agy-dream-style-v2";style.textContent=`
+ html.agy-dream-active-v2 body { background:var(--agy-dream-base-bg)!important; }
+ html.agy-dream-active-v2 [data-agy-dream-root] { position:relative;z-index:1; }
+ html.agy-dream-active-v2 [data-agy-dream-clear] { background-color:transparent!important;background-image:none!important; }
+ html.agy-dream-active-v2 [data-agy-dream-protect] { background-color:var(--agy-dream-old-bg)!important;backdrop-filter:none!important; }
+ html.agy-dream-active-v2 [data-agy-dream-card] { background-color:var(--agy-dream-card-bg)!important;backdrop-filter:blur(12px);border-radius:12px; }
+ html.agy-dream-active-v2 [data-agy-dream-chrome] { background-color:var(--agy-dream-chrome-bg)!important;backdrop-filter:blur(12px); }
+ html.agy-dream-active-v2 :is(.bg-sidebar,aside,[role=navigation]) {background-color:var(--agy-ui-surface)!important;background-image:radial-gradient(ellipse at 0 0,#a88ee51f,transparent 65%),repeating-linear-gradient(135deg,transparent 0 38px,#b994ee08 38px 39px)!important;border-color:#ae8eda38!important;}
+ html.agy-dream-active-v2 :is(header,[role=tablist],[role=status],.titlebar) {background-color:var(--agy-ui-surface)!important;border-color:#ae8eda38!important;}
+ html.agy-dream-active-v2 :is(.bg-sidebar,[role=navigation],aside) :is([aria-selected=true],[aria-current=true],[data-state=active],[class~="bg-sidebar-muted"],[class~="bg-sidebar-secondary"]) {background-color:var(--agy-ui-selected)!important;background-image:radial-gradient(circle at 92% 22%,#f0c5ff55 0 2px,transparent 3px),repeating-linear-gradient(125deg,transparent 0 18px,#b9a2f519 18px 19px),linear-gradient(110deg,#9e8ce524,#e5b5f415)!important;box-shadow:inset 3px 0 #bda2f2,inset 0 0 0 1px #bda2f238;border-radius:9px;}
+ html.agy-dream-active-v2 :is(button,a,[role=tab]):hover:not(:disabled) {outline-color:#b99bea;background-color:var(--agy-ui-hover);}
+ html.agy-dream-active-v2 :is([role=tab][aria-selected=true],[role=tab][data-state=active]) {background:var(--agy-ui-selected)!important;box-shadow:inset 0 -2px #b99bea;}
+ html.agy-dream-active-v2 :is(button,a,input,textarea,[contenteditable=true]):focus-visible {outline:2px solid #b49aee;outline-offset:2px;}
+ html.agy-dream-active-v2 :is([role=menu],[role=dialog],[role=listbox]) {background-color:var(--agy-ui-surface)!important;border-color:#ae8eda38!important;box-shadow:0 8px 28px #15101f38;}
+ html.agy-dream-active-v2 [data-agy-dream-reading] {background:transparent!important;border:0;box-shadow:none;}
+ html.agy-dream-active-v2 :is([data-agy-dream-reading],[data-agy-dream-card],.md-sticky-message-bleed,.surface-composer,.surface-composer-card,form),
+ html.agy-dream-active-v2 :is([data-agy-dream-reading],[data-agy-dream-card],.md-sticky-message-bleed,.surface-composer,.surface-composer-card,form) *:not(.monaco-editor,.monaco-editor *,.cm-editor,.cm-editor *,.xterm,.xterm *,.integrated-terminal,.integrated-terminal *) {background-color:transparent!important;background-image:none!important;backdrop-filter:none!important;}
+ html.agy-dream-active-v2 :is([data-agy-dream-reading],.md-sticky-message-bleed)::after,html.agy-dream-active-v2 :is([data-agy-dream-reading],.md-sticky-message-bleed)::before {background:none!important;box-shadow:none!important;}
+ html.agy-dream-active-v2 .md-sticky-message-bleed {box-shadow:none!important;}
+ html.agy-dream-active-v2 .agy-sheet :has(>.md-sticky-message-bleed){position:relative!important;top:auto!important;}
+ html.agy-dream-active-v2 :is([data-agy-dream-reading],.md-sticky-message-bleed) *::after,html.agy-dream-active-v2 :is([data-agy-dream-reading],.md-sticky-message-bleed) *::before{background:none!important;box-shadow:none!important;}
+ html.agy-dream-active-v2 [data-agy-dream-welcome] { padding-top:0!important;justify-content:flex-end!important;padding-bottom:28px!important; }
+ html.agy-dream-active-v2 .agy-sheet {border-radius:22px;overflow:hidden;box-shadow:inset 0 0 0 1px #c5afe626;}
+ html.agy-dream-active-v2 [data-agy-dream-fade] {background:none!important;box-shadow:none!important;}
+ html.agy-dream-active-v2 .agy-sheet .surface-composer[class] {border-radius:22px!important;background-color:transparent!important;background-image:var(--agy-ui-glass)!important;backdrop-filter:blur(22px) saturate(125%)!important;box-shadow:inset 0 1px 0 #e3d4ff29,inset 0 0 0 1px #c8afe62e,0 10px 30px #100c1b26;}
+ html.agy-dream-active-v2 [data-agy-output-mode="glass"] [data-agy-dream-segment][data-agy-dream-segment] {background-color:transparent!important;background-image:var(--agy-ui-glass)!important;backdrop-filter:blur(18px) saturate(115%)!important;border-radius:14px;box-shadow:inset 0 1px 0 #e3d4ff24,0 4px 16px #100c1b18;padding:12px 16px;}
+ html.agy-dream-active-v2 .agy-sheet .surface-composer-card {border-radius:21px!important;}
+ html.agy-dream-active-v2 :is([role=dialog],[role=menu],[role=listbox]) {border-radius:16px;}
+ `;
+ function mark(el,attribute){if(!el.hasAttribute(attribute)){saved.push([el,attribute,null]);el.setAttribute(attribute,"");}}
+ function variable(el,key,value){saved.push([el,"style:"+key,el.style.getPropertyValue(key),el.style.getPropertyPriority(key)]);el.style.setProperty(key,value);}
+ function restore([el,attr,value,priority]){if(attr.startsWith("style:")){const k=attr.slice(6);value?el.style.setProperty(k,value,priority):el.style.removeProperty(k);}else value===null?el.removeAttribute(attr):el.setAttribute(attr,value);}
+ mark(root,"data-agy-output-mode");mark(root,"data-agy-dream-root");mark(root,"data-agy-dream-clear");
+ const nativeBackgrounds=new WeakMap([[root,getComputedStyle(root).backgroundColor]]);
+ function surfaceBackground(el){
+  for(let node=el;node;node=node.parentElement){const bg=nativeBackgrounds.get(node)||getComputedStyle(node).backgroundColor;if(bg!=="transparent"&&bg!=="rgba(0, 0, 0, 0)")return bg;}
+  return "#fff";
+ }
+ const bodyColor=surfaceBackground(root);
+ const rgb=bodyColor.match(/[\d.]+/g)?.slice(0,3).map(Number)||[255,255,255],dark=rgb.reduce((a,b)=>a+b,0)<360;
+ const fallback=bodyColor;
+ variable(document.body,"--agy-ui-surface",dark?"#211e2d":"#f3edfc");
+ variable(document.body,"--agy-ui-selected",dark?"#443754":"#e5d8f6");
+ variable(document.body,"--agy-ui-reading",dark?"#211e2df5":"#fffafff5");
+ variable(document.body,"--agy-ui-hover",dark?"#a58ade1c":"#b494e526");
+ variable(document.body,"--agy-ui-glass",dark?"linear-gradient(165deg,#4b3e546e,#17121f99)":"linear-gradient(165deg,#fffaff99,#ddd0ed66)");
+ for(const [name,value] of Object.entries(dark?{"--background":"#1c1926","--card":"#262132","--popover":"#2b2537","--muted":"#30283e","--secondary":"#342b43","--sidebar":"#211e2d","--sidebar-muted":"#443754","--border":"#ac8ddd32","--ring":"#baa0ef"}:{"--background":"#faf7ff","--card":"#fffaff","--popover":"#fffaff","--muted":"#eee4f7","--secondary":"#eadff6","--sidebar":"#f3edfc","--sidebar-muted":"#e5d8f6","--border":"#a98bd63b","--ring":"#9d7bd1"}))variable(root,name,value);
+
+ variable(document.body,"--agy-dream-base-bg",dark?"#211e2d":"#f3edfc");
+ let active=true,timer,observer,resize,geometryTarget=null;
+ function geometry(){
+  const pane=[...document.querySelectorAll(".agy-sheet")].sort((a,b)=>b.getBoundingClientRect().width*b.getBoundingClientRect().height-a.getBoundingClientRect().width*a.getBoundingClientRect().height)[0];
+  const welcome=pane&&[...pane.querySelectorAll("div")].find(e=>e.classList.contains("pt-[30vh]"));
+  if(welcome)mark(welcome,"data-agy-dream-welcome");
+  const region=pane||root,r=region.getBoundingClientRect();
+ Object.assign(layer.style,{inset:"auto",left:r.left+"px",top:r.top+"px",width:r.width+"px",height:r.height+"px",borderRadius:pane?"22px":"0"});
+  if(resize&&geometryTarget!==region){if(geometryTarget&&geometryTarget!==root)resize.unobserve(geometryTarget);resize.observe(region);geometryTarget=region;}
+  const factor=(config.fit==="contain"?Math.min(r.width/image.naturalWidth,r.height/image.naturalHeight):Math.max(r.width/image.naturalWidth,r.height/image.naturalHeight))*(config.zoom??1);
+  layer.style.backgroundSize="100% 100%,"+Math.round(image.naturalWidth*factor)+"px "+Math.round(image.naturalHeight*factor)+"px";
+  layer.style.backgroundPosition="center,"+(config.positionX??50)+"% "+(config.positionY??50)+"%";
+  return{region,scope:pane||root,width:r.width,height:r.height};
+ }
+ function scan(){
+  if(!active)return;
+  // Release removed page nodes; restore them first so reattachment can be themed again.
+  for(let i=saved.length-1;i>=0;i--)if(!saved[i][0].isConnected){restore(saved[i]);seen.delete(saved[i][0]);saved.splice(i,1);}
+  const area=geometry();
+  for(const fade of area.scope.querySelectorAll(".absolute.bottom-0.pointer-events-none")){
+   const rect=fade.getBoundingClientRect();
+   if(rect.height<=80&&rect.width>area.width*.3&&getComputedStyle(fade).backgroundImage.includes("linear-gradient"))mark(fade,"data-agy-dream-fade");
+  }
+  for(let parent=area.scope;parent&&root.contains(parent);parent=parent.parentElement){if(!nativeBackgrounds.has(parent))nativeBackgrounds.set(parent,getComputedStyle(parent).backgroundColor);mark(parent,"data-agy-dream-clear");if(parent===root)break;}
+  for(const article of area.scope.querySelectorAll(".scroll-mt-4,[role=article],.prose,.markdown-body")){const plate=article.closest(".scroll-mt-4")||article;mark(plate,"data-agy-dream-reading");seen.add(plate);for(const segment of article.querySelectorAll("p,h1,h2,h3,h4,h5,h6,ul,ol,blockquote,table")){if(!segment.parentElement.closest("ul,ol,blockquote,table,pre,.monaco-editor,.cm-editor,.xterm,form"))mark(segment,"data-agy-dream-segment");}}
+  for(const composer of area.scope.querySelectorAll(".surface-composer,form")){
+   let plate=composer,parent=composer.parentElement;
+   while(parent&&parent!==root){
+    const r=parent.getBoundingClientRect();
+    if(r.width>area.width*.8||r.height>area.height*.3)break;
+    if(r.width>0&&r.height>0)plate=parent;
+    parent=parent.parentElement;
+   }
+   if(!seen.has(plate)){mark(plate,"data-agy-dream-card");variable(plate,"--agy-dream-card-bg",dark?"rgba(31,29,43,.95)":"rgba(255,255,255,.94)");seen.add(plate);}
+  }
+  for(const el of root.querySelectorAll("div,main,section,aside,nav,header,form,textarea,pre,code,[contenteditable=true],[role=dialog],[role=menu],[role=listbox]")){
+   if(!area.scope.contains(el))continue;
+   if(seen.has(el)||el===layer||el===style||el.closest("#agy-dream-wallpaper-v2"))continue;
+   const rect=el.getBoundingClientRect();if(rect.width<1||rect.height<1)continue;
+   const css=getComputedStyle(el),bg=css.backgroundColor;
+   nativeBackgrounds.set(el,bg);
+   if(el.matches(protect)){
+    mark(el,"data-agy-dream-protect");variable(el,"--agy-dream-old-bg",surfaceBackground(el));seen.add(el);continue;
+   }
+   if(el.closest(protect))continue;
+   if(bg!=="rgba(0, 0, 0, 0)"&&bg!=="transparent"&&(el.matches("aside,nav,header,[role=navigation]")||(rect.width<innerWidth*.35&&rect.height>innerHeight*.55)||(rect.top<90&&rect.width>innerWidth*.65&&rect.height<110))){
+    mark(el,"data-agy-dream-chrome");variable(el,"--agy-dream-chrome-bg",dark?"rgba(25,20,38,.76)":"rgba(249,244,255,.80)");seen.add(el);continue;
+   }
+   if(el.matches(".surface-composer,.surface-composer-card,form")){
+    mark(el,"data-agy-dream-card");variable(el,"--agy-dream-card-bg",dark?"rgba(31,29,43,.96)":"rgba(255,255,255,.95)");seen.add(el);continue;
+   }
+   if(el.matches("div,main,section")&&rect.width>innerWidth*.42&&rect.height>innerHeight*.36){
+    mark(el,"data-agy-dream-clear");seen.add(el);
+   }
+  }
+ }
+ function schedule(){clearTimeout(timer);timer=setTimeout(scan,160);}
+ function update(next){config=next;root.setAttribute("data-agy-output-mode",config.outputMode==="glass"?"glass":"transparent");layer.style.opacity=String(config.opacity??.55);layer.style.backgroundColor="transparent";layer.style.backgroundImage='linear-gradient(rgba(20,15,35,'+config.scrim+'),rgba(20,15,35,'+config.scrim+')),url("'+config.image+'")';layer.style.backgroundSize=config.fit==="adaptive"?"100% 100%,cover":"100% 100%,"+config.fit;layer.style.backgroundColor=config.fit==="adaptive"?(dark?"#242033":"#ede4f7"):"transparent";scan();}
+ function destroy(){
+  active=false;clearTimeout(timer);observer?.disconnect();resize?.disconnect();layer.remove();style.remove();document.documentElement.classList.remove("agy-dream-active-v2");
+  for(const entry of saved.reverse())restore(entry);
+  saved.length=0;
+  delete window[key];return{removed:true};
+ }
+ document.head.append(style);document.body.prepend(layer);document.documentElement.classList.add("agy-dream-active-v2");
+ update(config);observer=new MutationObserver(schedule);observer.observe(root,{childList:true,subtree:true});resize=new ResizeObserver(schedule);resize.observe(root);
+ const status=()=>({applied:active&&root.isConnected&&layer.isConnected&&style.isConnected,protected:root.querySelectorAll("[data-agy-dream-protect]").length,surfaces:root.querySelectorAll("[data-agy-dream-clear]").length,trackedChanges:saved.length});
+ window[key]={update,destroy,status,owner:config.owner};return status();
+}
+module.exports={installTheme};

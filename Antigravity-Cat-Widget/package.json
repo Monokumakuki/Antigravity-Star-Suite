@@ -1,0 +1,23 @@
+{
+  "name": "antigravity-cat-widget",
+  "version": "0.2.9",
+  "description": "Desktop pet companion and quota monitoring widget for Google Antigravity",
+  "main": "src/main/index.cjs",
+  "scripts": {
+    "start": "node ../tools/launch.cjs widget",
+    "test": "node --test test/runtime.test.cjs"
+  },
+  "keywords": [
+    "antigravity",
+    "widget",
+    "desktop-pet",
+    "quota",
+    "gemini"
+  ],
+  "author": "Monokumakuki",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Monokumakuki/Antigravity-Star-Suite.git"
+  }
+}

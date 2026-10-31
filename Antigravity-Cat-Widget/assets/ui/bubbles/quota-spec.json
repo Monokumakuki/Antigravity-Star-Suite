@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "style": "thought-ellipse-white-navy",
+  "border": "#253a7b",
+  "background": "#FFFFFF",
+  "text": "#526cb2",
+  "lowQuota": "#A9692F",
+  "progress": {
+    "meaning": "remaining percent, never used percent",
+    "min": 0,
+    "max": 100,
+    "unknown": "empty striped track; value —; omit aria-valuenow; no countdown",
+    "zero": "0% is known and empty; do not render as unknown",
+    "color": "amber/lavender"
+  },
+  "placement": {
+    "bubbleUpright": true,
+    "dots": 2,
+    "avoidCoveringFace": true,
+    "windowPaddingForDotsCssPx": 54
+  },
+  "sourceRules": {
+    "demo": "always labelled 演示",
+    "real": "only from verified adapter",
+    "weekly": "separate window, no averaging",
+    "countdown": "only when actual resetsAt exists; reset time reached does not prove restored quota"
+  },
+  "accessibility": {
+    "role": "progressbar",
+    "name": "额度剩余",
+    "valueNow": "only known finite 0..100",
+    "textAlternative": true
+  }
+}
