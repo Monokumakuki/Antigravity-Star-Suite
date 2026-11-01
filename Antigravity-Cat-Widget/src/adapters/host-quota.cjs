@@ -42,7 +42,7 @@ class HostQuotaAdapter extends EventEmitter{
   finally{c?.close();this.busy=false;if(this.active)this.emit('change',this.snapshot);}
  }
  async openNativeQuota(){
-  let c;try{const host=await discover();if(!host)return;c=new Cdp(host.target.webSocketDebuggerUrl);
+  let c;try{const host=await this.discover();if(!host)return;c=new this.Client(host.target.webSocketDebuggerUrl);
    await c.evaluate("(()=>{if(document.querySelector('[role=dialog]'))return;[...document.querySelectorAll('button')].find(b=>b.innerText.trim()==='Settings')?.click()})()");
    await new Promise(resolve=>setTimeout(resolve,350));
    await c.evaluate("[...document.querySelectorAll('[role=dialog] button')].find(b=>b.innerText.trim()==='Models')?.click()");

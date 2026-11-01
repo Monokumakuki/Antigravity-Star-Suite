@@ -10,9 +10,9 @@ app.disableHardwareAcceleration();
 if(!app.requestSingleInstanceLock())app.quit();
 else if(process.argv.includes("--quit"))app.quit();
 else{
- let quitting=false,recoveryTimer,visualTimer,visualChecking=false,blankFrames=0,lastPresentedGeneration=null;
+ let quitting=false,recoveryTimer,visualTimer,visualChecking=false,blankFrames=0,visualCheckInterval=15000,uptimeCheckTimer;
  const recoveryLog=reason=>{try{require("node:fs").appendFileSync(path.join(dataDir,"recovery.log"),new Date().toISOString()+" "+reason+"\n");}catch{}};
- let win,tray,panel,drag=null,source={online:false,source:"正在读取本机日志",files:0},saveTimer,displayScale=null,hostArea=null,hostLayout=null,dragTimer=null,facing="right",dockSide="",artShift=0;
+ let win,tray,panel,drag=null,source={online:false,source:"正在读取本机日志",files:0},saveTimer,displayScale=null,hostArea=null,hostLayout=null,dragTimer=null,facing="right",dockSide="",artShift=0,hostWasOnline=false,offlineTimer;
  const foreground=new ForegroundMonitor(),quotaAdapter=new HostQuotaAdapter();
  const dialogue=require("../../assets/dialogue/zh-CN.json");
  const running=new Set();
@@ -25,21 +25,57 @@ else{
  function safePosition(x,y,w,h){const area=screen.getDisplayNearestPoint({x:Number.isFinite(x)?x:screen.getPrimaryDisplay().workArea.x,y:Number.isFinite(y)?y:0}).workArea;return{x:Math.round(Number.isFinite(x)?Math.max(area.x,Math.min(area.x+area.width-w,x)):area.x+area.width-w-18),y:Math.round(Number.isFinite(y)?Math.max(area.y,Math.min(area.y+area.height-h,y)):area.y+area.height-h-18)};}
  function syncVisibility(){
   if(!win||win.isDestroyed())return;
-  if(!settings.get("hostWindowOnly")){hostArea=null;hostLayout=null;displayScale=settings.get("scale");if(!win.isVisible())win.showInactive();return;}
+  if(!settings.get("hostWindowOnly")){
+   hostArea=null;hostLayout=null;displayScale=settings.get("scale");
+   if(!win.isVisible())win.showInactive();
+   return;
+  }
   if(drag)return;
-  const previousArea=hostArea;let state=foreground.state;hostArea=null;
+  const previousArea=hostArea;let state=foreground.state;
   if(state.bounds)state={...state,bounds:screen.screenToDipRect(null,state.bounds)};
   const placement=hostPlacement(state,settings.get("scale"),settings.get("hostOffsetX"),settings.get("hostOffsetY"),settings.get("hostDock"));
-  if(!placement){hostLayout=null;win.hide();if(drag){drag=null;sm.handlePointerUp();}return;}
-  hostArea=state.bounds;displayScale=placement.scale;artShift=placement.artShift;dockSide=Math.abs(placement.visualX-hostArea.x)<2?"left":Math.abs(placement.visualX+displayScale-hostArea.x-hostArea.width)<2?"right":"";facing=placement.visualX+displayScale/2<hostArea.x+hostArea.width/2?"left":"right";
+
+  // Hide widget when host is unavailable (hidden/minimized/too small)
+  if(!placement){
+   hostArea=null;hostLayout=null;
+   if(drag){drag=null;sm.handlePointerUp();}
+   if(win.isVisible())win.hide();
+   return;
+  }
+
+  // Host is available - show widget and update position
+  hostArea=state.bounds;displayScale=placement.scale;artShift=placement.artShift;
+  dockSide=Math.abs(placement.visualX-hostArea.x)<2?"left":Math.abs(placement.visualX+displayScale-hostArea.x-hostArea.width)<2?"right":"";
+  facing=placement.visualX+displayScale/2<hostArea.x+hostArea.width/2?"left":"right";
   const nextLayout=JSON.stringify([state.hostId,state.restoreGeneration,displayScale,hostArea.width,hostArea.height,settings.get("hostOffsetX"),settings.get("hostOffsetY"),settings.get("hostDock")]);
-  const nativeTranslation=state.nativeFollowing&&previousArea&&hostLayout===nextLayout;hostLayout=nextLayout;
-  const old=win.getBounds(),stationary=nativeTranslation&&previousArea.x===hostArea.x&&previousArea.y===hostArea.y;
+  const nativeTranslation=state.nativeFollowing&&previousArea&&hostLayout===nextLayout;
+  const layoutChanged=hostLayout!==nextLayout;
+  hostLayout=nextLayout;
+  const old=win.getBounds(),stationary=nativeTranslation&&previousArea&&previousArea.x===hostArea.x&&previousArea.y===hostArea.y;
   if((!nativeTranslation||stationary)&&Object.keys(placement.bounds).some(key=>Math.abs(old[key]-placement.bounds[key])>2))win.setBounds(placement.bounds);
-  if(state.restoreGeneration!==lastPresentedGeneration||state.widgetVisible===false){lastPresentedGeneration=state.restoreGeneration;win.hide();win.showInactive();win.webContents.invalidate();}else if(!win.isVisible())win.showInactive();
+
+  // Ensure widget is visible when host is available
+  if(!win.isVisible()){
+   win.showInactive();
+   // After restore, trigger compositor refresh to avoid blank rendering - optimized delay
+   if(layoutChanged)setTimeout(()=>{
+     if(win&&!win.isDestroyed()){
+       win.webContents.send('widget:preload-frames');
+       win.webContents.invalidate();
+     }
+   },50);
+  }
   return !nativeTranslation;
  }
- function show(){if(!win||win.isDestroyed())createWindow();if(settings.get("hostWindowOnly"))foreground.start(win.getNativeWindowHandle());syncVisibility();win.setIgnoreMouseEvents(settings.get("clickThrough"),{forward:true});}
+ function show(){
+  if(!win||win.isDestroyed())createWindow();
+  if(settings.get("hostWindowOnly"))foreground.start(win.getNativeWindowHandle());
+  // The widget must enter the visible state exactly once. From then on the native
+  // helper controls z-order without hiding or moving the surface off-screen.
+  if(!win.isVisible())win.showInactive();
+  syncVisibility();
+  win.setIgnoreMouseEvents(settings.get("clickThrough"),{forward:true});
+ }
  function apply(partial){
   const allowed=["scale","alwaysOnTop","reducedMotion","sound","volume","soundSet","bubbleOn","turnCostOn","turnCostDurationMs","clickThrough","snap","bubblePage","manualQuota","manualPercent","manualWeeklyPercent","hostWindowOnly","easterEggs"];
   const oldScale=settings.get("scale"),oldHostOnly=settings.get("hostWindowOnly");
@@ -149,7 +185,15 @@ else{
   if(settings.get("hostWindowOnly"))foreground.start(win?.getNativeWindowHandle());
   audio.setEnabled(settings.get("sound"));audio.setVolume(settings.get("volume"));audio.setPreset(settings.get("soundSet"));adapter.start();quotaAdapter.start();
   recoveryTimer=setInterval(()=>{if(!win||win.isDestroyed()){show();return;}if(settings.get("hostWindowOnly"))foreground.start(win.getNativeWindowHandle());},2000);
+  // Adaptive visual check interval based on uptime
+  uptimeCheckTimer=setInterval(()=>{
+   const uptime=process.uptime();
+   visualCheckInterval=uptime>=7200?120000:uptime>=3600?60000:15000;
+  },300000); // Check every 5 minutes
+  let lastVisualCheck=0;
   visualTimer=setInterval(async()=>{
+   if(Date.now()-lastVisualCheck<visualCheckInterval)return;
+   lastVisualCheck=Date.now();
    if(visualChecking||drag||!win||win.isDestroyed()||!win.isVisible()||(settings.get("hostWindowOnly")&&!hostArea))return;
    visualChecking=true;const checked=win;
    try{
@@ -161,8 +205,13 @@ else{
     if(blankFrames>=2&&win===checked&&!checked.isDestroyed()){recoveryLog("blank-surface-recreate opaque="+opaque);checked.destroy();}
    }catch(error){if(win===checked&&!checked.isDestroyed()){recoveryLog("surface-check-recreate "+error.message);checked.destroy();}}
    finally{visualChecking=false;}
-  },15000);
-  const resume=()=>{drag=null;hostLayout=null;foreground.stop();show();publish();win?.webContents.invalidate();};
+  },15000); // Gate checks using the current adaptive interval
+  const resume=()=>{drag=null;hostLayout=null;foreground.stop();show();publish();
+   if(win&&!win.isDestroyed()){
+     win.webContents.send('widget:force-repaint');
+     win.webContents.invalidate();
+   }
+  };
   powerMonitor.on("resume",resume);powerMonitor.on("unlock-screen",resume);
   screen.on("display-removed",reset);
   screen.on("display-metrics-changed",()=>{if(settings.get("hostWindowOnly")){syncVisibility();publish();}});

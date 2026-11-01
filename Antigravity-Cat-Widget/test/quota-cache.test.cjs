@@ -10,3 +10,10 @@ test('closed Models cache and transient errors retain labelled last observation;
  fail=false;id='ws://127.0.0.1:1/two';await a.tick();assert.equal(a.snapshot.weekly,null);
  sample={cacheAvailable:true,fiveHour:50,weekly:60};await a.tick();assert.equal(a.snapshot.weekly,60);assert.equal(a.snapshot.stale,false);a.stop();
 });
+test('startup and host changes read quota without opening native Models',async()=>{
+ let id='ws://127.0.0.1:1/a',opens=0,reads=0;
+ class Client{async evaluate(){reads++;return {fiveHour:null,weekly:null};}close(){}}
+ const a=new HostQuotaAdapter({discover:async()=>({target:{webSocketDebuggerUrl:id}}),Client});
+ a.openNativeQuota=async()=>{opens++;};a.start();
+ try{while(a.busy)await new Promise(r=>setImmediate(r));assert.equal(reads,1);assert.equal(opens,0);await a.tick();assert.equal(opens,0);id='ws://127.0.0.1:1/b';await a.tick();assert.equal(opens,0);}finally{a.stop();}
+});
