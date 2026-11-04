@@ -11,7 +11,7 @@ const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;
   assert(fs.existsSync(path.join(dir,'LICENSES.chromium.html')));assert(fs.existsSync(path.join(dir,'resources/app/NOTICE.md')));
   assert(!fs.existsSync(path.join(dir,'resources/app',kind==='Widget'?'Antigravity-Dream-Skin':'Antigravity-Cat-Widget')));
   assert(!fs.existsSync(path.join(dir,'node_modules')));checks.push(kind+': self-contained extraction in non-ASCII directory; licenses and independent payload');
-  execFileSync(path.join(dir,'StartupSettings.exe'),['--self-test'],{env,timeout:15000});checks.push(kind+': autostart/link flags, host transition decision, isolated HKCU Run cleanup');
+  execFileSync(path.join(dir,'StartupSettings.exe'),['--self-test'],{env,timeout:15000});checks.push(kind+': autostart/link flags, shortcut repair idempotence and exact backup restore, user edits preserved, isolated HKCU Run cleanup');
   const app=await _electron.launch({executablePath:path.join(dir,exe),args:['--data-dir='+path.join(testRoot,kind+'-profile')],env,timeout:30000});
   try{
    const page=await app.firstWindow();await page.waitForFunction(()=>window.widgetApi||window.dreamApi,{},{timeout:20000});

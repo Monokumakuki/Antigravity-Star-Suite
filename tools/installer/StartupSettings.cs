@@ -48,15 +48,15 @@ internal static class StartupSettings {
  static string Programs {get{return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs),"Antigravity Star Suite",Title);}}
  public static void Shortcuts(bool create){
   string exe=Path.Combine(Root,AppExe),manager=Path.Combine(Root,"StartupSettings.exe");
-  string[] paths={Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),Title+".lnk"),Path.Combine(Programs,Title+".lnk"),Path.Combine(Programs,"启动设置.lnk"),Path.Combine(Programs,"卸载.lnk")};
-  if(create){CreateShortcut(paths[0],exe,"");CreateShortcut(paths[1],exe,"");CreateShortcut(paths[2],manager,"");CreateShortcut(paths[3],manager,"--uninstall");}
+  string[] paths={Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),Title+".lnk"),Path.Combine(Programs,Title+".lnk"),Path.Combine(Programs,"启动设置.lnk"),Path.Combine(Programs,"卸载.lnk"),Path.Combine(Programs,"一键连接 Antigravity.lnk")};
+  if(create){CreateShortcut(paths[0],exe,"");CreateShortcut(paths[1],exe,"");CreateShortcut(paths[2],manager,"");CreateShortcut(paths[3],manager,"--uninstall");CreateShortcut(paths[4],manager,"--connect");}
   else foreach(var file in paths)if(File.Exists(file))try{dynamic shell=Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell"));dynamic lnk=shell.CreateShortcut(file);if(String.Equals((string)lnk.TargetPath,exe,StringComparison.OrdinalIgnoreCase)||String.Equals((string)lnk.TargetPath,manager,StringComparison.OrdinalIgnoreCase))File.Delete(file);}catch{}
  }
  public static string UninstallKey {get{return "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\AntigravityStarSuite"+Kind;}}
  static void Uninstall(){
   if(!File.Exists(Path.Combine(Root,".starsuite-install")))throw new Exception("安装标记不存在，无法卸载此目录。");
   if(MessageBox.Show("卸载"+Title+"？将保留你的角色设置和用量记录。","卸载",MessageBoxButtons.YesNo)!=DialogResult.Yes)return;
-  SetFlags(false,false);Shortcuts(false);
+  SetFlags(false,false);Registry.CurrentUser.DeleteSubKeyTree(SettingsKey,false);Shortcuts(false);HostConnection.ReleaseIfLast();
   using(var p=Process.Start(new ProcessStartInfo(Path.Combine(Root,AppExe),"--quit"){UseShellExecute=false,CreateNoWindow=true}))p.WaitForExit(5000);
   Registry.CurrentUser.DeleteSubKeyTree(UninstallKey,false);
   string temp=Path.Combine(Path.GetTempPath(),"StarSuite-Uninstall-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(temp);
@@ -73,6 +73,7 @@ internal static class StartupSettings {
   Application.EnableVisualStyles();try{
    if(args.Length>1&&args[0]=="--remove-root"){RemoveRoot(args[1]);return;}
    if(args.Length>0&&args[0]=="--self-test"){
+    HostConnection.SelfTest();
     if(!ShouldLaunch(true,false,true,false,false)||ShouldLaunch(false,true,false,true,true)||!ShouldLaunch(false,true,false,true,false)||ShouldLaunch(false,false,true,true,false))Environment.Exit(1);
     SettingsKey+="\\Verification-"+Guid.NewGuid().ToString("N");RunName+="Verification"+Guid.NewGuid().ToString("N");
     try{
@@ -85,13 +86,17 @@ internal static class StartupSettings {
     return;
    }
    if(args.Length>0&&args[0]=="--watch"){Watch();return;}
+   if(args.Length>0&&args[0]=="--connect"){HostConnection.Connect();return;}
+   if(args.Length>0&&args[0]=="--restore-connection"){HostConnection.RestoreWithNotice();return;}
    if(args.Length>0&&args[0]=="--uninstall"){Uninstall();return;}
-   var form=new Form{Text=Title+" · 启动设置",Width=540,Height=270,StartPosition=FormStartPosition.CenterScreen,FormBorderStyle=FormBorderStyle.FixedDialog,MaximizeBox=false};
+   var form=new Form{Text=Title+" · 连接与启动设置",Width=560,Height=360,StartPosition=FormStartPosition.CenterScreen,FormBorderStyle=FormBorderStyle.FixedDialog,MaximizeBox=false};
    var auto=new CheckBox{Text="开机登录后自动启动",Left=24,Top=26,Width=460,Checked=Flag("AutoStart")};
    var link=new CheckBox{Text="打开 Antigravity 时联动启动（后台检测）",Left=24,Top=66,Width=470,Checked=Flag("HostLink")};
-   var note=new Label{Text="可独立开关。联动会在登录后后台检测宿主进程，约 2 秒响应。\n不修改宿主文件、快捷方式或安装路径；只对当前用户生效。",Left=24,Top=106,Width=475,Height=55};
+   var note=new Label{Text="先点“一键连接”启用额度和壁纸连接，仅限本机。\n联动约 2 秒响应；连接配置可恢复，不修改宿主安装文件。",Left=24,Top=106,Width=500,Height=55};
    var save=new Button{Text="保存设置",Left=360,Top=174,Width=130};save.Click+=(s,e)=>{SetFlags(auto.Checked,link.Checked);if(auto.Checked||link.Checked)Process.Start(new ProcessStartInfo(Application.ExecutablePath,"--watch"){UseShellExecute=false,CreateNoWindow=true});MessageBox.Show("启动设置已保存。");form.Close();};
-   form.Controls.AddRange(new Control[]{auto,link,note,save});Application.Run(form);
+   var connect=new Button{Text="一键连接 / 修复",Left=24,Top=230,Width=220,Height=36};connect.Click+=(s,e)=>{connect.Enabled=false;try{HostConnection.Connect();}finally{connect.Enabled=true;}};
+   var restore=new Button{Text="恢复原启动方式",Left=270,Top=230,Width=220,Height=36};restore.Click+=(s,e)=>HostConnection.RestoreWithNotice();
+   form.Controls.AddRange(new Control[]{auto,link,note,save,connect,restore});Application.Run(form);
   }catch(Exception e){MessageBox.Show(e.Message,Title);Environment.ExitCode=1;}
  }
 }
