@@ -60,94 +60,109 @@ internal static class ForegroundHost {
         EnumWindows(delegate(IntPtr w,IntPtr data){Rect r;if(IsWindowVisible(w)&&IsHost(w)&&GetClientRect(w,out r)){long area=(long)(r.Right-r.Left)*(r.Bottom-r.Top);if(area>largest){largest=area;result=w;}}return true;},IntPtr.Zero);
         return result;
     }
+    [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr w,int attribute,out int value,int size);
+    [DllImport("user32.dll")] private static extern uint MsgWaitForMultipleObjectsEx(uint count,IntPtr handles,uint milliseconds,uint mask,uint flags);
+    [DllImport("winmm.dll")] private static extern uint timeBeginPeriod(uint period);
+    [DllImport("winmm.dll")] private static extern uint timeEndPeriod(uint period);
+    private static bool moving,preciseTimer,hasMoved;
+    private static readonly Stopwatch motion=Stopwatch.StartNew();
+    private static void WaitForUpdate() {
+        bool fast=moving||(hasMoved&&motion.ElapsedMilliseconds<120);
+        if(fast&&!preciseTimer)preciseTimer=timeBeginPeriod(1)==0;
+        if(!fast&&preciseTimer){timeEndPeriod(1);preciseTimer=false;}
+        // WinEvents wake immediately; short polling only bridges gaps during a drag.
+        MsgWaitForMultipleObjectsEx(0,IntPtr.Zero,fast?2u:32u,0x04FF,4);
+    }
+    private static bool Available(IntPtr w) {
+        int cloaked;
+        return w!=IntPtr.Zero&&IsWindow(w)&&IsWindowVisible(w)&&!IsIconic(w)&&
+            !(DwmGetWindowAttribute(w,14,out cloaked,4)==0&&cloaked!=0);
+    }
+    private static bool IsTopmost(IntPtr w) {return (GetWindowLongPtr(w,-20).ToInt64()&8)!=0;}
+    private static void StackWithHost(IntPtr widget,IntPtr host) {
+        if(widget==IntPtr.Zero||!IsWindow(widget))return;
+        // Preserve Electron's ownership/visibility; never move the host's owner group.
+        if(IsTopmost(widget))SetWindowPos(widget,new IntPtr(-2),0,0,0,0,0x0213);
+        if(!Available(host))return;
+        IntPtr above=GetWindow(host,3);
+        if(above==widget)return;
+        // HWND_TOP inserts only into the normal band after any topmost windows.
+        if(above!=IntPtr.Zero&&IsTopmost(above))above=IntPtr.Zero;
+        SetWindowPos(widget,above,0,0,0,0,0x0213);
+    }
     private static void Main(string[] args) {
         int parentId;
-        if (args.Length < 1 || !Int32.TryParse(args[0], out parentId)) return;
+        if(args.Length<1||!Int32.TryParse(args[0],out parentId))return;
         EnablePhysicalCoordinates();
         long widgetValue=0;if(args.Length>1)Int64.TryParse(args[1],out widgetValue);
-        IntPtr widget=new IntPtr(widgetValue);
+        IntPtr widget=new IntPtr(widgetValue),trackedHost=IntPtr.Zero;
         if(widget!=IntPtr.Zero)new Thread(delegate(){try{Console.ReadLine();}catch{}stopping=true;}){IsBackground=true}.Start();
-        try {
-            using (var parent = Process.GetProcessById(parentId)) {
-                IntPtr lastHost = IntPtr.Zero,previousForeground=IntPtr.Zero; string previous = null;
-                IntPtr trackedHost=IntPtr.Zero;Point hostPoint=new Point();var heartbeat=Stopwatch.StartNew();var layerHeartbeat=Stopwatch.StartNew();bool hostWasAvailable=false;int restoreGeneration=0;
-                Action followHost=delegate(){
-                    if(widget==IntPtr.Zero||trackedHost==IntPtr.Zero||IsIconic(trackedHost))return;
-                    var next=new Point();Rect widgetRect;
-                    if(ClientToScreen(trackedHost,ref next)&&GetWindowRect(widget,out widgetRect)){
-                        int dx=next.X-hostPoint.X,dy=next.Y-hostPoint.Y;hostPoint=next;
-                        if(dx!=0||dy!=0)SetWindowPos(widget,IntPtr.Zero,widgetRect.Left+dx,widgetRect.Top+dy,0,0,0x0015);
-                    }
-                };
-                WinEvent locationChanged=delegate(IntPtr hook,uint ev,IntPtr w,int obj,int child,uint thread,uint time){if(w==trackedHost&&obj==0)followHost();};
-                IntPtr locationHook=widget==IntPtr.Zero?IntPtr.Zero:SetWinEventHook(0x800B,0x800B,IntPtr.Zero,locationChanged,0,0,0);
-                int pollInterval = 16;
-                bool available = false;
-                do {
-                    Message queued;while(PeekMessage(out queued,IntPtr.Zero,0,0,1)){}
-                    string kind = "unknown", bounds = null;
-                    try {
-                        IntPtr window = GetForegroundWindow(); uint pid;
-                        GetWindowThreadProcessId(window, out pid);
-                        if(widget!=IntPtr.Zero){
-                            IntPtr foregroundHost=GetAncestor(window,3);
-                            if(IsHost(foregroundHost))lastHost=foregroundHost;
-                            if(!IsHost(lastHost))lastHost=FindHost();
-                            if(trackedHost!=lastHost){trackedHost=lastHost;hostPoint=new Point();ClientToScreen(lastHost,ref hostPoint);restoreGeneration++;}
-                            if(GetWindow(widget,4)!=IntPtr.Zero)SetWindowLongPtr(widget,-8,IntPtr.Zero);
-                            bool foregroundChanged=window!=previousForeground;
-                            previousForeground=window;
-                            available=lastHost!=IntPtr.Zero&&IsWindowVisible(lastHost)&&!IsIconic(lastHost);
-                            // Widget visibility is controlled exclusively by JS layer - native only manages z-order.
-                            // Widget stays visible but moves between topmost (host foreground) and normal layers.
-                            uint hostPid=0;if(available)GetWindowThreadProcessId(lastHost,out hostPid);
-                            bool wantTop=available&&(pid==hostPid||window==widget);
-                            // Adaptive heartbeat: 1s when host available, 3s when unavailable
-                            int heartbeatInterval = available ? 1000 : 3000;
-                            // Force z-order update on every foreground change and periodic heartbeat
-                            if(foregroundChanged||layerHeartbeat.ElapsedMilliseconds>=heartbeatInterval){
-                                if(wantTop){
-                                    // Host or widget is foreground: elevate to topmost
-                                    SetWindowPos(widget,new IntPtr(-1),0,0,0,0,0x0013);
-                                }else{
-                                    // Other app is foreground: drop to normal band behind that app
-                                    SetWindowPos(widget,new IntPtr(-2),0,0,0,0,0x0013);
-                                    if(window!=IntPtr.Zero&&window!=widget){
-                                        // Insert specifically behind the current foreground window
-                                        IntPtr after=window;
-                                        // Skip over any topmost windows in the chain
-                                        while(after!=IntPtr.Zero&&(GetWindowLongPtr(after,-20).ToInt64()&8)!=0)after=GetWindow(after,2);
-                                        SetWindowPos(widget,after==IntPtr.Zero?new IntPtr(1):after,0,0,0,0,0x0013);
-                                    }
-                                }
-                                layerHeartbeat.Restart();
-                            }
-                            if(available&&!hostWasAvailable){
-                                // Host restored from minimized/hidden - reset position tracking
-                                hostPoint=new Point();ClientToScreen(lastHost,ref hostPoint);
-                                restoreGeneration++;
-                            }
-                            hostWasAvailable=available;
-                            if(available)followHost();
-                            bounds=available?Bounds(lastHost):null;kind=bounds==null?"other":"host";
-                            pollInterval = available ? 16 : 32; // Further reduce polling when host unavailable
-
-                        }else{
-                            IntPtr foregroundHost=GetAncestor(window,3);
-                            if(IsHost(foregroundHost))lastHost=foregroundHost;
-                            if(!IsHost(lastHost))lastHost=FindHost();
-                            bounds=Bounds(lastHost);kind=bounds==null?"other":(pid==parentId?"self":"host");
-                        }
-                    } catch { lastHost = IntPtr.Zero; }
-                    pollInterval = available ? 16 : 32; // Adaptive polling
-                    string message = "{\"restoreGeneration\":" + restoreGeneration + ",\"kind\":\"" + kind + "\",\"bounds\":" + (bounds ?? "null") + ",\"attached\":" + ((widget!=IntPtr.Zero&&lastHost!=IntPtr.Zero)?"true":"false") + ",\"widgetVisible\":" + ((widget!=IntPtr.Zero&&IsWindowVisible(widget))?"true":"false") + ",\"hostId\":\"" + lastHost.ToInt64() + "\",\"nativeFollowing\":" + ((widget!=IntPtr.Zero)?"true":"false") + "}";
-                    if (message != previous || heartbeat.ElapsedMilliseconds>=1000) { Console.WriteLine(message); Console.Out.Flush(); previous = message; heartbeat.Restart(); }
-                } while (!stopping && !parent.WaitForExit(pollInterval));
-                if(locationHook!=IntPtr.Zero)UnhookWinEvent(locationHook);
-                if(widget!=IntPtr.Zero&&IsWindow(widget))SetWindowPos(widget,new IntPtr(-2),0,0,0,0,0x0013);
-                GC.KeepAlive(locationChanged);
-                if(widget!=IntPtr.Zero&&IsWindow(widget))SetWindowLongPtr(widget,-8,IntPtr.Zero);
+        Point hostPoint=new Point();bool hostWasAvailable=false;int restoreGeneration=0;
+        Action followHost=delegate(){
+            if(widget==IntPtr.Zero||!hostWasAvailable||!Available(trackedHost))return;
+            var next=new Point();Rect widgetRect;
+            if(ClientToScreen(trackedHost,ref next)&&GetWindowRect(widget,out widgetRect)){
+                int dx=next.X-hostPoint.X,dy=next.Y-hostPoint.Y;hostPoint=next;
+                if(dx!=0||dy!=0){SetWindowPos(widget,IntPtr.Zero,widgetRect.Left+dx,widgetRect.Top+dy,0,0,0x0215);hasMoved=true;motion.Restart();}
             }
-        } catch { }
+        };
+        WinEvent changed=delegate(IntPtr h,uint ev,IntPtr w,int obj,int child,uint thread,uint time){
+            if(w==trackedHost&&ev==10)moving=true;
+            if(w==trackedHost&&ev==11){moving=false;hasMoved=true;motion.Restart();followHost();}
+            if(w==trackedHost&&obj==0&&ev==0x800B)followHost();
+            if(ev==3||ev==0x8004)StackWithHost(widget,trackedHost);
+        };
+        IntPtr locationHook=SetWinEventHook(0x800B,0x800B,IntPtr.Zero,changed,0,0,0);
+        IntPtr foregroundHook=SetWinEventHook(3,3,IntPtr.Zero,changed,0,0,0);
+        IntPtr reorderHook=SetWinEventHook(0x8004,0x8004,IntPtr.Zero,changed,0,0,0);
+        IntPtr dragHook=SetWinEventHook(10,11,IntPtr.Zero,changed,0,0,0);
+        try {using(var parent=Process.GetProcessById(parentId)){
+            var scan=Stopwatch.StartNew();var heartbeat=Stopwatch.StartNew();var metadata=Stopwatch.StartNew();string previous=null;
+            IntPtr lastForeground=IntPtr.Zero;
+            while(!stopping&&!parent.HasExited&&(widget==IntPtr.Zero||IsWindow(widget))){
+                Message queued;while(PeekMessage(out queued,IntPtr.Zero,0,0,1)){}
+                followHost();
+                if(previous!=null&&metadata.ElapsedMilliseconds<32){WaitForUpdate();continue;}
+                metadata.Restart();
+                IntPtr foreground=GetForegroundWindow();uint pid;GetWindowThreadProcessId(foreground,out pid);
+                // Process/class discovery is not on the per-movement path.
+                if(trackedHost==IntPtr.Zero||scan.ElapsedMilliseconds>=1000||foreground!=lastForeground){
+                    IntPtr candidate=GetAncestor(foreground,3);
+                    if(IsHost(candidate)&&candidate!=trackedHost){trackedHost=candidate;hostWasAvailable=false;}
+                    if(!IsHost(trackedHost)){trackedHost=FindHost();hostWasAvailable=false;}
+                    if(!hostWasAvailable){hostPoint=new Point();ClientToScreen(trackedHost,ref hostPoint);}
+                    scan.Restart();
+                }
+                bool available=Available(trackedHost);
+                if(!available)moving=false;
+                if(available&&!hostWasAvailable){
+                    hostPoint=new Point();ClientToScreen(trackedHost,ref hostPoint);restoreGeneration++;
+                }
+                hostWasAvailable=available;lastForeground=foreground;
+                if(available)followHost();
+                StackWithHost(widget,trackedHost);
+                string bounds=available?Bounds(trackedHost):null;
+                string kind=bounds==null?"other":(pid==parentId?"self":"host");
+                bool behind=false;for(IntPtr w=GetWindow(foreground,2);w!=IntPtr.Zero;w=GetWindow(w,2)){
+                    if(w==widget){behind=true;break;}
+                }
+                string message="{\"restoreGeneration\":"+restoreGeneration+",\"kind\":\""+kind+"\",\"bounds\":"+(bounds??"null")+
+                    ",\"attached\":"+(widget!=IntPtr.Zero&&trackedHost!=IntPtr.Zero?"true":"false")+
+                    ",\"widgetVisible\":"+(widget!=IntPtr.Zero&&IsWindowVisible(widget)?"true":"false")+
+                    ",\"aboveHost\":"+(widget!=IntPtr.Zero&&GetWindow(trackedHost,3)==widget?"true":"false")+
+                    ",\"nativeTopmost\":"+(widget!=IntPtr.Zero&&IsTopmost(widget)?"true":"false")+
+                    ",\"behindForeground\":"+(behind?"true":"false")+
+                    ",\"hostId\":\""+trackedHost.ToInt64()+"\",\"nativeFollowing\":"+(widget!=IntPtr.Zero?"true":"false")+"}";
+                if(message!=previous||heartbeat.ElapsedMilliseconds>=1000){Console.WriteLine(message);Console.Out.Flush();previous=message;heartbeat.Restart();}
+                // Wake on WinEvent messages immediately instead of sleeping a whole display frame.
+                WaitForUpdate();
+            }
+        }}catch(Exception e){Console.Error.WriteLine(e.Message);}
+        finally {
+            foreach(var hook in new[]{locationHook,foregroundHook,reorderHook,dragHook})if(hook!=IntPtr.Zero)UnhookWinEvent(hook);
+            if(preciseTimer)timeEndPeriod(1);
+            if(widget!=IntPtr.Zero&&IsWindow(widget))SetWindowPos(widget,new IntPtr(-2),0,0,0,0,0x0213);
+            GC.KeepAlive(changed);
+        }
     }
 }

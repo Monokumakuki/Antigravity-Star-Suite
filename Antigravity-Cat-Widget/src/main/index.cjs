@@ -10,7 +10,7 @@ app.disableHardwareAcceleration();
 if(!app.requestSingleInstanceLock())app.quit();
 else if(process.argv.includes("--quit"))app.quit();
 else{
- let quitting=false,recoveryTimer,visualTimer,visualChecking=false,blankFrames=0,visualCheckInterval=15000,uptimeCheckTimer;
+ let quitting=false,recoveryTimer,visualTimer,visualChecking=false,blankFrames=0,visualCheckInterval=15000,lastVisualCheck=0,uptimeCheckTimer;
  const recoveryLog=reason=>{try{require("node:fs").appendFileSync(path.join(dataDir,"recovery.log"),new Date().toISOString()+" "+reason+"\n");}catch{}};
  let win,tray,panel,drag=null,source={online:false,source:"正在读取本机日志",files:0},saveTimer,displayScale=null,hostArea=null,hostLayout=null,dragTimer=null,facing="right",dockSide="",artShift=0,hostWasOnline=false,offlineTimer;
  const foreground=new ForegroundMonitor(),quotaAdapter=new HostQuotaAdapter();
@@ -51,8 +51,8 @@ else{
   const nativeTranslation=state.nativeFollowing&&previousArea&&hostLayout===nextLayout;
   const layoutChanged=hostLayout!==nextLayout;
   hostLayout=nextLayout;
-  const old=win.getBounds(),stationary=nativeTranslation&&previousArea&&previousArea.x===hostArea.x&&previousArea.y===hostArea.y;
-  if((!nativeTranslation||stationary)&&Object.keys(placement.bounds).some(key=>Math.abs(old[key]-placement.bounds[key])>2))win.setBounds(placement.bounds);
+  // Native geometry can already be newer than this IPC report; never replay a translation.
+  if(!nativeTranslation){const old=win.getBounds();if(Object.keys(placement.bounds).some(key=>Math.abs(old[key]-placement.bounds[key])>2))win.setBounds(placement.bounds);}
 
   // Ensure widget is visible when host is available
   if(!win.isVisible()){
@@ -72,7 +72,7 @@ else{
   if(settings.get("hostWindowOnly"))foreground.start(win.getNativeWindowHandle());
   // The widget must enter the visible state exactly once. From then on the native
   // helper controls z-order without hiding or moving the surface off-screen.
-  if(!win.isVisible())win.showInactive();
+  if(!settings.get("hostWindowOnly")&&!win.isVisible())win.showInactive();
   syncVisibility();
   win.setIgnoreMouseEvents(settings.get("clickThrough"),{forward:true});
  }
@@ -188,13 +188,13 @@ else{
   // Adaptive visual check interval based on uptime
   uptimeCheckTimer=setInterval(()=>{
    const uptime=process.uptime();
-   visualCheckInterval=uptime>=7200?120000:uptime>=3600?60000:15000;
+   if(uptime>7200)visualCheckInterval=120000;
+   else if(uptime>3600)visualCheckInterval=60000;
   },300000); // Check every 5 minutes
-  let lastVisualCheck=0;
   visualTimer=setInterval(async()=>{
+   if(visualChecking||drag||!win||win.isDestroyed()||!win.isVisible()||(settings.get("hostWindowOnly")&&!hostArea))return;
    if(Date.now()-lastVisualCheck<visualCheckInterval)return;
    lastVisualCheck=Date.now();
-   if(visualChecking||drag||!win||win.isDestroyed()||!win.isVisible()||(settings.get("hostWindowOnly")&&!hostArea))return;
    visualChecking=true;const checked=win;
    try{
     const healthy=await Promise.race([checked.webContents.executeJavaScript(`(()=>{const face=document.querySelector('.agy-face');if(!face)return false;const r=face.getBoundingClientRect();if(r.width<20||r.height<20)return false;let node=face;while(node){const s=getComputedStyle(node);if(s.display==='none'||s.visibility==='hidden'||Number(s.opacity)===0)return false;node=node.parentElement;}return [...face.querySelectorAll('img')].some(img=>img.complete&&img.naturalWidth>0&&Number(getComputedStyle(img).opacity)>0);})()`),new Promise((_,reject)=>{const timer=setTimeout(()=>reject(Error("renderer-check-timeout")),4000);timer.unref();})]);
@@ -205,7 +205,7 @@ else{
     if(blankFrames>=2&&win===checked&&!checked.isDestroyed()){recoveryLog("blank-surface-recreate opaque="+opaque);checked.destroy();}
    }catch(error){if(win===checked&&!checked.isDestroyed()){recoveryLog("surface-check-recreate "+error.message);checked.destroy();}}
    finally{visualChecking=false;}
-  },15000); // Gate checks using the current adaptive interval
+  },15000);
   const resume=()=>{drag=null;hostLayout=null;foreground.stop();show();publish();
    if(win&&!win.isDestroyed()){
      win.webContents.send('widget:force-repaint');
@@ -216,7 +216,7 @@ else{
   screen.on("display-removed",reset);
   screen.on("display-metrics-changed",()=>{if(settings.get("hostWindowOnly")){syncVisibility();publish();}});
  });
- app.on("before-quit",()=>{quitting=true;clearInterval(visualTimer);clearInterval(recoveryTimer);clearInterval(dragTimer);foreground.stop();adapter.stop();quotaAdapter.stop();sm.destroy();clearTimeout(saveTimer);ledger.save();globalShortcut.unregisterAll();tray?.destroy();});
+ app.on("before-quit",()=>{quitting=true;clearInterval(visualTimer);clearInterval(uptimeCheckTimer);clearInterval(recoveryTimer);clearInterval(dragTimer);foreground.stop();adapter.stop();quotaAdapter.stop();sm.destroy();clearTimeout(saveTimer);ledger.save();globalShortcut.unregisterAll();tray?.destroy();});
  app.on("window-all-closed",()=>{if(!tray)app.quit();});
 }
 

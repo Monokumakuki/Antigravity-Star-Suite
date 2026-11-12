@@ -128,3 +128,7 @@ tools/                   启动、原生编译与隔离验证
 角色设计参考按提供者记录署名 **ZipZipPipe**；角色与设定集图片由 AI 辅助生成，保留生成提示词，不宣称 Google 官方授权或原设的再许可权。公开版未包含原作者参考图、私人截图或未确认再分发许可的 DSH 鸭叫音频。
 
 交互和产品灵感来自 [codex-maid-widget](https://github.com/Feeesack/codex-maid-widget) 与 [DeepSeek-Balance-Whale-Widget](https://github.com/MeteorNOX/DeepSeek-Balance-Whale-Widget)。感谢这些项目的公开实现与音效来源记录。
+
+## 0.2.14 窗口行为更新
+
+窗口模式下，挂件留在 Antigravity 上方并随它移动；其他窗口正常遮挡二者，切换应用不主动隐藏或临时置顶。宿主隐藏、最小化、关闭或空间不足时隐藏。优化拖动跟随，去除延迟位置回写。独立安装与一键连接功能保持。
