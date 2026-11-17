@@ -6,6 +6,9 @@
  function bubbleVisibility(open){const bubble=$("bubble");if(lastBubbleOpen===open)return;lastBubbleOpen=open;clearTimeout(hideAnimation);bubble.inert=!open;bubble.setAttribute("aria-hidden",String(!open));if(open){bubble.hidden=false;void bubble.offsetWidth;requestAnimationFrame(()=>{if(lastBubbleOpen)bubble.dataset.open="true";});}else{bubble.dataset.open="false";hideAnimation=setTimeout(()=>{if(!lastBubbleOpen)bubble.hidden=true;},snapshot?.settings.reducedMotion?0:180);}}
  function stopReaction(){clearTimeout(eggTimer);if(mascot.dataset.expression){delete mascot.dataset.expression;talkState=null;}}
  const pages=["quota","talk","today","latest"],format=v=>typeof v==="number"?v.toLocaleString():"—";
+ // 剩余时间：>=1 天显示「X天Y小时」，否则「X小时Y分钟」，不足1分钟「即将重置」
+ function fmtCountdown(ms){if(typeof ms!=="number"||!Number.isFinite(ms))return "";const m=Math.max(0,Math.floor(ms/60000));if(m<1)return "即将重置";const d=Math.floor(m/1440),h=Math.floor((m%1440)/60),mm=m%60;if(d>0)return d+"天"+h+"小时";if(h>0)return h+"小时"+mm+"分钟";return mm+"分钟";}
+ function paintReset(id,resetAt){const el=$(id);if(!el)return;const left=typeof resetAt==="number"?resetAt-Date.now():NaN;const text=fmtCountdown(left);if(!text){el.hidden=true;el.textContent="";return;}el.hidden=false;el.textContent="重置时间: "+text;}
  function stopSound(){gesture++;if(currentSound){currentSound.pause();currentSound.currentTime=0;currentSound=null;}}
  async function play(kind){
   const token=++gesture;if(currentSound)currentSound.pause();if(!snapshot?.settings.sound||snapshot.settings.volume===0)return;
@@ -29,6 +32,9 @@
     if(known)$("track"+suffix).setAttribute("aria-valuenow",value);else $("track"+suffix).removeAttribute("aria-valuenow");
    }
    $("caption").textContent=s.manualQuota?"手动记录":snapshot.quotaWindows?.stale?"上次读取 · 待更新":snapshot.quotaWindows?.cached?"上次读取":"";
+   const qw=snapshot.quotaWindows||{};
+   paintReset("reset-5h",s.manualQuota?null:qw.fiveHourResetAt);
+   paintReset("reset-week",s.manualQuota?null:qw.weeklyResetAt);
    $("meta").textContent="";
   }else if(selected==="today"){
    $("title").textContent="今日用量 · 本机";$("value").hidden=false;$("value").textContent=format(l.todayTokens.total);$("detail").hidden=false;
@@ -64,6 +70,7 @@
  api.onStep(step=>{if(!closed&&snapshot?.settings.turnCostOn){message("模型步骤完成",format(step.tokens.total)+" tokens","输入 "+format(step.tokens.input)+" · 输出 "+format(step.tokens.output),snapshot.settings.turnCostDurationMs,"真实本机记录 · 非整轮计费");play("release");}});
  function reaction(manual=false,clicked=false){if(!snapshot||!personality)return;const kind=personality.reaction({enabled:snapshot.settings.easterEggs,hidden:document.hidden||closed||!snapshot.settings.bubbleOn,busy:!!temporary||!!pointer||(clicked&&!!mascot.dataset.expression),state:clicked?snapshot.persistentState:snapshot.state},manual,clicked);if(!kind)return;mascot.dataset.expression=kind;if(selected==="talk"){talkLine=personality.say(kind);render();}clearTimeout(eggTimer);eggTimer=setTimeout(()=>{delete mascot.dataset.expression;talkState=null;render();},3200);}
  api.onReaction(()=>reaction(true));const ambient=setInterval(()=>reaction(),30000);
+  const resetTimer=setInterval(()=>{if(snapshot&&selected==="quota"&&!temporary&&!snapshot.settings.manualQuota){const qw=snapshot.quotaWindows||{};paintReset("reset-5h",qw.fiveHourResetAt);paintReset("reset-week",qw.weeklyResetAt);}},30000);
  snapshot=await api.get();personality=new window.StarPersonality(snapshot.dialogue);selected=snapshot.settings.bubblePage;render();
- window.addEventListener("beforeunload",()=>{clearTimeout(timeout);clearTimeout(autoHide);clearTimeout(hideAnimation);clearTimeout(eggTimer);clearInterval(ambient);stopSound();});
+ window.addEventListener("beforeunload",()=>{clearTimeout(timeout);clearTimeout(autoHide);clearTimeout(hideAnimation);clearTimeout(eggTimer);clearInterval(ambient);clearInterval(resetTimer);stopSound();});
 })();

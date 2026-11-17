@@ -38,7 +38,9 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
 .agy-art[data-reduced-motion="true"] .agy-face{transition:none}
 .agy-art .agy-phrase{font-size:23px;line-height:1.45}
 
-.quota-label{display:flex;justify-content:space-between;font-size:13px;color:#7753aa;margin-top:7px}.quota-label strong{color:#8851cd}.agy-art .agy-quota__track[data-known="false"]{background:#e6d5ff}.agy-art .agy-quota__track[data-known="false"] .agy-quota__fill{background:repeating-linear-gradient(120deg,#b696ee 0,#b696ee 7px,#d4b6f6 7px,#d4b6f6 14px);opacity:.7;box-shadow:none}.agy-art .agy-quota__track{margin:5px 0 9px}
+.quota-label{display:flex;justify-content:space-between;font-size:13px;color:#7753aa;margin-top:7px}.quota-label strong{color:#8851cd}
+.agy-reset{font-size:10px;font-style:normal;font-weight:500;color:#8b6bb7;margin-left:4px;white-space:nowrap;opacity:.95}.agy-reset[hidden]{display:none}
+.agy-art .agy-quota__track[data-known="false"]{background:#e6d5ff}.agy-art .agy-quota__track[data-known="false"] .agy-quota__fill{background:repeating-linear-gradient(120deg,#b696ee 0,#b696ee 7px,#d4b6f6 7px,#d4b6f6 14px);opacity:.7;box-shadow:none}.agy-art .agy-quota__track{margin:5px 0 9px}
 
 .agy-art[data-facing="left"]{--agy-anchor:calc(60% - var(--agy-width) * .116)}
 

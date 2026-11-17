@@ -28,19 +28,26 @@ test('every startup reads immediately without opening Models, including empty ca
 test('updated host nY cache reads two quota windows without opening UI',()=>{
  const vm=require('node:vm'),{readHostQuota}=require('../src/adapters/host-quota.cjs');
  const sample=vm.runInNewContext('('+readHostQuota.toString()+')()',{
-  nY:[{displayName:'Gemini Models',buckets:[{bucketId:'gemini-5h',remaining:{case:'remainingFraction',value:0}},{bucketId:'gemini-weekly',remaining:{case:'remainingFraction',value:.42}}]}],mFb:1000,jFb:()=>{},
+  nY:[{displayName:'Gemini Models',buckets:[{bucketId:'gemini-5h',remaining:{case:'remainingFraction',value:0},resetTime:{seconds:'1794905263',nanos:0}},{bucketId:'gemini-weekly',remaining:{case:'remainingFraction',value:.42},resetTime:{seconds:'1795276006',nanos:0}}]}],mFb:1000,jFb:()=>{},
  });
  assert.equal(sample.fiveHour,0);assert.equal(sample.weekly,42);assert.equal(sample.fetchedAt,1000);
+ assert.equal(sample.fiveHourResetAt,1794905263000);assert.equal(sample.weeklyResetAt,1795276006000);
+});
+test('invalid or distant resetTime is ignored, never shown as a countdown',()=>{
+ const vm=require('node:vm'),{readHostQuota}=require('../src/adapters/host-quota.cjs');
+ const run=buckets=>vm.runInNewContext('('+readHostQuota.toString()+')()',{nY:[{displayName:'Gemini Models',buckets}],mFb:1});
+ assert.equal(run([{bucketId:'gemini-5h',remaining:{case:'remainingFraction',value:.5}}]).fiveHourResetAt,null);
+ assert.equal(run([{bucketId:'gemini-5h',remaining:{case:'remainingFraction',value:.5},resetTime:{seconds:'99999999999999'}}]).fiveHourResetAt,null);
 });
 
 test('background query extracts Gemini only and never opens UI or serializes credentials',async()=>{
  const vm=require('node:vm'),{queryHostQuota}=require('../src/adapters/host-quota.cjs');let calls=0;
  const el={__reactFiber$test:{memoizedProps:{value:{core:{cloudCodeService:{retrieveUserQuotaSummary:async(a,b)=>{
   calls++;assert.equal(a,undefined);assert.equal(b,false);
-  return {response:{groups:[{displayName:'Gemini Models',buckets:[{bucketId:'gemini-5h',remaining:{case:'remainingFraction',value:0}},{bucketId:'gemini-weekly',remaining:{case:'remainingFraction',value:.75}},{bucketId:'other',remaining:{case:'remainingFraction',value:1}}]}]},secret:'must not leave host'};
+  return {response:{groups:[{displayName:'Gemini Models',buckets:[{bucketId:'gemini-5h',remaining:{case:'remainingFraction',value:0},resetTime:{seconds:'1794905263'}},{bucketId:'gemini-weekly',remaining:{case:'remainingFraction',value:.75},resetTime:{seconds:'1795276006'}},{bucketId:'other',remaining:{case:'remainingFraction',value:1}}]}]},secret:'must not leave host'};
  }}}}}}};
  const out=await vm.runInNewContext('('+queryHostQuota.toString()+')(()=>{throw Error("unexpected cache fallback")})',{document:{querySelectorAll:selector=>{assert.equal(selector,'body *');return [el];}}});
- assert.equal(calls,1);assert.equal(out.fiveHour,0);assert.equal(out.weekly,75);assert.equal(JSON.stringify(out).includes('secret'),false);
+ assert.equal(calls,1);assert.equal(out.fiveHour,0);assert.equal(out.weekly,75);assert.equal(out.fiveHourResetAt,1794905263000);assert.equal(out.weeklyResetAt,1795276006000);assert.equal(JSON.stringify(out).includes('secret'),false);
 });
 test('background quota query propagates service failures instead of claiming fresh data',async()=>{
  const {queryHostQuota}=require('../src/adapters/host-quota.cjs');const previous=global.document;
