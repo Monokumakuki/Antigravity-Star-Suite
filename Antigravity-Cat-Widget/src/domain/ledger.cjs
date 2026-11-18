@@ -3,6 +3,15 @@ const validCount = value => Number.isSafeInteger(value) && value >= 0 ? value : 
 function localDate(date = new Date()) {
   return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
 }
+function parseValidDate(str) {
+  if (typeof str !== "string") return null;
+  const trimmed = str.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null;
+  const [y, m, d] = trimmed.split("-").map(Number);
+  const date = new Date(y, m - 1, d, 23, 59, 59, 999);
+  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null;
+  return date;
+}
 function makeRecord(step, sessionId, previous) {
   if (!Number.isSafeInteger(step?.step_index) || step.step_index < 0 || step.status !== "DONE") return null;
   if (typeof sessionId !== "string" || !sessionId || sessionId.length > 256) return null;
@@ -30,6 +39,9 @@ class UsageLedger {
     this.storagePath = options.storagePath || null;
     this.now = options.now || (() => new Date());
     this.records = new Map();
+    this._byDate = new Map();
+    this._latest = null;
+    this._indexDirty = true;
     this.quotaRemainingPercent = null;
     if (this.storagePath) {
       const stored = readJson(this.storagePath, { records: [] });
@@ -50,8 +62,25 @@ class UsageLedger {
     if (!record) return null;
     if (previous && JSON.stringify(previous.tokens) === JSON.stringify(record.tokens)) return null;
     this.records.set(record.id, record);
+    this._indexDirty = true;
     // Fill late numeric metadata without another completion bubble or sound.
     return previous ? { ...record, updated: true } : record;
+  }
+  _ensureIndex() {
+    if (!this._indexDirty) return;
+    this._byDate.clear();
+    let latest = null;
+    for (const row of this.records.values()) {
+      let bucket = this._byDate.get(row.date);
+      if (!bucket) {
+        bucket = [];
+        this._byDate.set(row.date, bucket);
+      }
+      bucket.push(row);
+      if (!latest || row.timestamp.localeCompare(latest.timestamp) > 0) latest = row;
+    }
+    this._latest = latest;
+    this._indexDirty = false;
   }
   save() {
     if (!this.storagePath) return;
@@ -72,25 +101,52 @@ class UsageLedger {
       quality: known ? "manual" : "unknown", ariaValueNow: known ? value : null
     };
   }
-  getSnapshot() {
+  getSnapshot(multiDays = 7, multiEndDateStr = "") {
+    this._ensureIndex();
     const date = localDate(this.now());
-    const rows = [...this.records.values()].filter(row => row.date === date);
-    const sum = key => {
-      if (!rows.length || rows.some(row => row.tokens[key] === null)) return null;
-      const value = rows.reduce((total, row) => total + row.tokens[key], 0);
+    const rows = this._byDate.get(date) || [];
+    const sum = (items, key) => {
+      if (!items.length || items.some(row => row.tokens[key] === null)) return null;
+      const value = items.reduce((total, row) => total + row.tokens[key], 0);
       return Number.isSafeInteger(value) ? value : null;
     };
     const partial = rows.some(row => row.tokens.total === null);
-    const latest = [...this.records.values()].sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0] || null;
+    const latest = this._latest;
+
+    const days = Number.isSafeInteger(Number(multiDays)) && Number(multiDays) >= 1 && Number(multiDays) <= 90 ? Number(multiDays) : 7;
+    const endAnchor = parseValidDate(multiEndDateStr) || this.now();
+    const endStr = localDate(endAnchor);
+    const startDateObj = new Date(endAnchor.getFullYear(), endAnchor.getMonth(), endAnchor.getDate() - days + 1, 0, 0, 0, 0);
+    const startStr = localDate(startDateObj);
+
+    const multiRows = [];
+    for (let i = 0; i < days; i++) {
+      const d = new Date(endAnchor.getFullYear(), endAnchor.getMonth(), endAnchor.getDate() - i);
+      const bucket = this._byDate.get(localDate(d));
+      if (bucket) multiRows.push(...bucket);
+    }
+    const multiDayPartial = multiRows.some(row => row.tokens.total === null);
+
     return {
       date, todayTokens: {
-        prompt: sum("input"), cache: sum("cache"), output: sum("output"),
-        total: sum("total")
+        prompt: sum(rows, "input"), cache: sum(rows, "cache"), output: sum(rows, "output"),
+        total: sum(rows, "total")
       },
       todaySteps: rows.length, todayTurns: null, todayCost: null,
+      multiDayTokens: {
+        prompt: sum(multiRows, "input"), cache: sum(multiRows, "cache"), output: sum(multiRows, "output"),
+        total: sum(multiRows, "total")
+      },
+      multiDaySteps: multiRows.length,
+      multiDayPartial,
+      multiDayRange: {
+        start: startStr,
+        end: endStr,
+        days
+      },
       quota: this.getQuotaStatus(), accountBalance: null, latest, partial, isDemoMode: false
     };
   }
   get todayTotalTokens() { return this.getSnapshot().todayTokens.total; }
 }
-module.exports = { UsageLedger, localDate, validCount };
+module.exports = { UsageLedger, localDate, validCount, parseValidDate };
