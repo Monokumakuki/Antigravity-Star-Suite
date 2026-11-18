@@ -17,7 +17,7 @@ else{
  const dialogue=require("../../assets/dialogue/zh-CN.json");
  const running=new Set();
  const settings=new SettingsManager(path.join(dataDir,"settings.json")),ledger=new UsageLedger({storagePath:path.join(dataDir,"usage-v2.json")}),sm=new WidgetStateMachine("offline"),adapter=new TranscriptAdapter(),audio=new AudioManager();
- const snapshot=()=>{ledger.quotaRemainingPercent=settings.get("manualQuota")===true?settings.get("manualPercent"):null;return{artShift,dockSide,quotaWindows:quotaAdapter.snapshot,facing,state:sm.currentState,persistentState:sm.persistentState,dialogue:dialogue.lines,settings:settings.getAll(),displayScale:displayScale||settings.get("scale"),visibility:{supported:process.platform==="win32",foreground:foreground.state.kind,nativeAttached:foreground.state.attached===true,withinHost:!!hostArea},ledger:ledger.getSnapshot(),source,presets:audio.getPresetList()};};
+ const snapshot=()=>{ledger.quotaRemainingPercent=settings.get("manualQuota")===true?settings.get("manualPercent"):null;return{artShift,dockSide,quotaWindows:quotaAdapter.snapshot,facing,state:sm.currentState,persistentState:sm.persistentState,dialogue:dialogue.lines,settings:settings.getAll(),displayScale:displayScale||settings.get("scale"),visibility:{supported:process.platform==="win32",foreground:foreground.state.kind,nativeAttached:foreground.state.attached===true,withinHost:!!hostArea},ledger:ledger.getSnapshot(settings.get("multiDayDays"),settings.get("multiDayEndDate")),source,presets:audio.getPresetList()};};
  const send=(channel,data)=>{for(const w of [win,panel])if(w&&!w.isDestroyed())w.webContents.send(channel,data);};
  const publish=()=>send("widget:snapshot",snapshot());
  function syncQuotaState(){if(["idle","warning"].includes(sm.persistentState))sm.setPersistentState((settings.get("manualQuota")?[settings.get("manualPercent"),settings.get("manualWeeklyPercent")]:[quotaAdapter.snapshot.fiveHour,quotaAdapter.snapshot.weekly]).some(v=>typeof v==="number"&&v<=20)?"warning":"idle");}
@@ -77,7 +77,7 @@ else{
   win.setIgnoreMouseEvents(settings.get("clickThrough"),{forward:true});
  }
  function apply(partial){
-  const allowed=["scale","alwaysOnTop","reducedMotion","sound","volume","soundSet","bubbleOn","turnCostOn","turnCostDurationMs","clickThrough","snap","bubblePage","manualQuota","manualPercent","manualWeeklyPercent","hostWindowOnly","easterEggs"];
+  const allowed=["scale","alwaysOnTop","reducedMotion","sound","volume","soundSet","bubbleOn","turnCostOn","turnCostDurationMs","clickThrough","snap","bubblePage","manualQuota","manualPercent","manualWeeklyPercent","hostWindowOnly","easterEggs","multiDayOn","multiDayDays","multiDayEndDate"];
   const oldScale=settings.get("scale"),oldHostOnly=settings.get("hostWindowOnly");
   if(!oldHostOnly&&partial?.hostWindowOnly===true&&win){const pos=win.getBounds();settings.update({x:pos.x,y:pos.y});}
   settings.update(Object.fromEntries(Object.entries(partial||{}).filter(([k])=>allowed.includes(k))));

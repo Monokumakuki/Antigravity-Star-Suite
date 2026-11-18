@@ -5,7 +5,8 @@
  function armBubble(){clearTimeout(autoHide);if(!closed)autoHide=setTimeout(()=>{closed=true;render();},6500);}
  function bubbleVisibility(open){const bubble=$("bubble");if(lastBubbleOpen===open)return;lastBubbleOpen=open;clearTimeout(hideAnimation);bubble.inert=!open;bubble.setAttribute("aria-hidden",String(!open));if(open){bubble.hidden=false;void bubble.offsetWidth;requestAnimationFrame(()=>{if(lastBubbleOpen)bubble.dataset.open="true";});}else{bubble.dataset.open="false";hideAnimation=setTimeout(()=>{if(!lastBubbleOpen)bubble.hidden=true;},snapshot?.settings.reducedMotion?0:180);}}
  function stopReaction(){clearTimeout(eggTimer);if(mascot.dataset.expression){delete mascot.dataset.expression;talkState=null;}}
- const pages=["quota","talk","today","latest"],format=v=>typeof v==="number"?v.toLocaleString():"—";
+ const basePages=["quota","talk","today","latest"],format=v=>typeof v==="number"?v.toLocaleString():"—";
+ function getPages(){return snapshot?.settings?.multiDayOn?["quota","talk","today","history","latest"]:basePages;}
  function stopSound(){gesture++;if(currentSound){currentSound.pause();currentSound.currentTime=0;currentSound=null;}}
  async function play(kind){
   const token=++gesture;if(currentSound)currentSound.pause();if(!snapshot?.settings.sound||snapshot.settings.volume===0)return;
@@ -16,7 +17,8 @@
   if(!snapshot)return;const s=snapshot.settings,l=snapshot.ledger;
   mascot.style.setProperty("--agy-width",(snapshot.displayScale||s.scale)+"px");mascot.style.setProperty("--agy-shift",(snapshot.artShift||0)+"px");mascot.dataset.state=snapshot.state;mascot.dataset.dock=snapshot.dockSide||"";mascot.dataset.facing=snapshot.facing||"left";mascot.dataset.reducedMotion=String(s.reducedMotion);
   bubbleVisibility(!closed&&s.bubbleOn);for(const id of ["quota","value","detail"])$(id).hidden=true;
-  $("title").textContent="Gemini Models";$("meta").textContent="";$("page").textContent=(pages.indexOf(selected)+1)+" / 4";
+  const pages=getPages();if(!pages.includes(selected))selected="quota";
+  $("title").textContent="Gemini Models";$("meta").textContent="";$("page").textContent=(pages.indexOf(selected)+1)+" / "+pages.length;
   if(temporary){$("title").textContent=temporary.title;$("value").hidden=false;$("value").textContent=temporary.body;$("detail").hidden=!temporary.detail;$("detail").textContent=temporary.detail||"";$("meta").textContent=temporary.meta||"";return;}
   if(selected==="quota"){
    $("quota").hidden=false;
@@ -34,6 +36,11 @@
    $("title").textContent="今日用量 · 本机";$("value").hidden=false;$("value").textContent=format(l.todayTokens.total);$("detail").hidden=false;
    $("detail").textContent="输入 "+format(l.todayTokens.prompt)+" · 缓存 "+format(l.todayTokens.cache)+" · 输出 "+format(l.todayTokens.output);
    $("meta").textContent=l.todaySteps+" 个模型步骤 · "+(l.partial?"部分字段缺失":snapshot.source.coverage||"只读日志");
+  }else if(selected==="history"){
+   const m=l.multiDayTokens||{},r=l.multiDayRange||{};
+   $("title").textContent="多日用量 · "+(r.days||s.multiDayDays||7)+" 天";$("value").hidden=false;$("value").textContent=format(m.total);$("detail").hidden=false;
+   $("detail").textContent="输入 "+format(m.prompt)+" · 缓存 "+format(m.cache)+" · 输出 "+format(m.output);
+   $("meta").textContent=(l.multiDaySteps||0)+" 个模型步骤 · "+(l.multiDayPartial?"部分字段缺失 · ":"")+(r.start?r.start+" 至 "+r.end:"无记录");
   }else if(selected==="latest"){
    const r=l.latest;$("title").textContent="最近模型步骤";$("value").hidden=false;$("value").textContent=format(r?.tokens.total);$("detail").hidden=false;$("detail").textContent=r?"输入 "+format(r.tokens.input)+" · 输出 "+format(r.tokens.output):"尚无数值记录";
    $("meta").textContent=r?"本机记录 · 费用 —（无价格来源）":"等待真实会话记录";
@@ -41,7 +48,7 @@
   if(selected!=="talk")$("value").classList.remove("agy-phrase");
  }
  function message(title,body,detail="",ms=4500,meta=""){clearTimeout(timeout);temporary={title,body,detail,meta};closed=false;render();if(ms>0)timeout=setTimeout(()=>{temporary=null;render();},ms);}
- function select(delta){armBubble();clearTimeout(timeout);temporary=null;closed=false;selected=pages[(pages.indexOf(selected)+delta+pages.length)%pages.length];api.save({bubblePage:selected});render();}
+ function select(delta){const pages=getPages();armBubble();clearTimeout(timeout);temporary=null;closed=false;selected=pages[(pages.indexOf(selected)+delta+pages.length)%pages.length];api.save({bubblePage:selected});render();}
  $("prev").onclick=()=>select(-1);$("next").onclick=()=>select(1);$("close").onclick=()=>{clearTimeout(autoHide);closed=true;render();};$("toggle").onclick=()=>{closed=!closed;if(!snapshot.settings.bubbleOn)api.save({bubbleOn:true});armBubble();render();};$("settings").onclick=()=>api.command("settings");
  window.addEventListener("contextmenu",e=>{e.preventDefault();api.command("menu");});
  $("bubble").addEventListener("pointerenter",()=>clearTimeout(autoHide));$("bubble").addEventListener("pointerleave",armBubble);

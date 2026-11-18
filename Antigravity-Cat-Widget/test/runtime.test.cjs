@@ -71,3 +71,33 @@ test("oversized log lines cannot turn their tail into a model event; rotated cur
  let status;a.on("status",value=>status=value);a.filePath=dir;a.scan();
  assert.equal(status.online,false);assert.equal(status.files,0);
 });
+
+
+test("multi-day usage validates real dates, uses date index cache, and marks partial consistently",()=>{
+ const now=()=>new Date("2026-03-05T12:00:00+08:00"),ledger=new UsageLedger({now});
+ ledger.recordStep({sessionId:"s",step_index:1,status:"DONE",created_at:"2026-03-01T10:00:00+08:00",input_tokens:10,cache_read_tokens:5,output_tokens:2});
+ ledger.recordStep({sessionId:"s",step_index:2,status:"DONE",created_at:"2026-03-04T10:00:00+08:00",input_tokens:20,cache_read_tokens:10,output_tokens:5});
+ ledger.recordStep({sessionId:"s",step_index:3,status:"DONE",created_at:"2026-03-05T10:00:00+08:00",input_tokens:30,cache_read_tokens:0,output_tokens:8});
+ const snap=ledger.getSnapshot(3,"2026-03-05");
+ assert.deepEqual(snap.multiDayRange,{start:"2026-03-03",end:"2026-03-05",days:3});
+ assert.deepEqual(snap.multiDayTokens,{prompt:50,cache:10,output:13,total:73});
+ assert.equal(snap.multiDaySteps,2);assert.equal(snap.multiDayPartial,false);
+ // Invalid calendar date like 2026-02-31 must not roll over to March 3; falls back to today.
+ const invalidDateSnap=ledger.getSnapshot(2,"2026-02-31");
+ assert.deepEqual(invalidDateSnap.multiDayRange,{start:"2026-03-04",end:"2026-03-05",days:2});
+ assert.equal(invalidDateSnap.multiDayTokens.total,73);
+ // Missing component makes multi-day total unknown and sets multiDayPartial just like todayTokens.
+ ledger.recordStep({sessionId:"s",step_index:4,status:"DONE",created_at:"2026-03-04T15:00:00+08:00",input_tokens:null,cache_read_tokens:2,output_tokens:3});
+ const partialSnap=ledger.getSnapshot(3,"2026-03-05");
+ assert.deepEqual(partialSnap.multiDayTokens,{prompt:null,cache:12,output:16,total:null});
+ assert.equal(partialSnap.multiDayPartial,true);
+ assert.equal(partialSnap.multiDaySteps,3);
+ // SettingsManager also rejects invalid calendar dates and rounds days.
+ const settings=new SettingsManager(path.join(tmp(),"settings.json"));
+ settings.update({multiDayOn:true,multiDayDays:7.6,multiDayEndDate:"2026-02-31"});
+ assert.equal(settings.get("multiDayOn"),true);
+ assert.equal(settings.get("multiDayDays"),8);
+ assert.equal(settings.get("multiDayEndDate"),"");
+ settings.update({multiDayEndDate:"2026-02-28"});
+ assert.equal(settings.get("multiDayEndDate"),"2026-02-28");
+});
