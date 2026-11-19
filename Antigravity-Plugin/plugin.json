@@ -1,0 +1,12 @@
+{
+  "name": "antigravity-star-suite",
+  "display_name": "星语 · Antigravity Star Suite",
+  "description": "Antigravity 专属星语猫娘桌宠托管与织梦动态壁纸皮肤（支持本地 MP4 视频与自定义图片，零补丁升级不掉）。",
+  "version": "0.3.0",
+  "author": "Monokumakuki",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Monokumakuki/Antigravity-Star-Suite"
+  },
+  "logo": "assets/logo.svg"
+}

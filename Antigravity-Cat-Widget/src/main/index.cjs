@@ -1,6 +1,6 @@
 const {app,BrowserWindow,screen,Tray,Menu,ipcMain,nativeImage,globalShortcut,shell,powerMonitor}=require("electron");
 const path=require("node:path"),os=require("node:os");
-const {SettingsManager}=require("../domain/settings.cjs"),{UsageLedger}=require("../domain/ledger.cjs"),{WidgetStateMachine}=require("../domain/state-machine.cjs"),{TranscriptAdapter}=require("../adapters/transcript-adapter.cjs"),{AudioManager}=require("../domain/audio-manager.cjs");
+const {SettingsManager,DEFAULT_SETTINGS}=require("../domain/settings.cjs"),{readJson}=require("../../../shared/storage.cjs"),{UsageLedger}=require("../domain/ledger.cjs"),{WidgetStateMachine}=require("../domain/state-machine.cjs"),{TranscriptAdapter}=require("../adapters/transcript-adapter.cjs"),{AudioManager}=require("../domain/audio-manager.cjs");
 const {HostQuotaAdapter}=require("../adapters/host-quota.cjs");
 const {ForegroundMonitor,hostPlacement,characterPlacement,snapToEdges}=require("../domain/host-visibility.cjs");
 const dataDir=process.argv.find(a=>a.startsWith("--data-dir="))?.slice(11)||path.join(os.homedir(),".antigravity-cat-widget");
@@ -177,10 +177,12 @@ else{
  adapter.on("turnRunning",s=>{if(!s.historical){running.add(s.sessionId+":"+s.stepIndex);sm.setPersistentState("thinking");}});
  adapter.on("turnError",s=>{running.delete(s.sessionId+":"+s.stepIndex);if(!s.historical)sm.setPersistentState("error");});
  adapter.on("status",status=>{source=status;if(!status.online)sm.setPersistentState("offline");else if(sm.persistentState==="offline")sm.setPersistentState(running.size?"thinking":"idle");syncQuotaState();publish();});
- app.on("second-instance",(_event,args)=>{if(args.includes("--quit"))app.quit();else if(!args.includes("--background"))recall();});
+ const noTray=process.argv.includes("--no-tray");
+ function reloadSettingsFromDisk(){settings.data=settings.sanitize(readJson(settings.filePath,DEFAULT_SETTINGS));apply({});syncVisibility();}
+ app.on("second-instance",(_event,args)=>{if(args.includes("--quit")){app.quit();return;}if(args.includes("--reload-settings"))reloadSettingsFromDisk();if(args.includes("--dock-left"))dock("left");if(args.includes("--dock-right"))dock("right");if(args.includes("--reset-pos"))reset();if(args.includes("--refresh")){adapter.scan();quotaAdapter.tick();publish();}if(!args.includes("--background"))recall();});
  app.whenReady().then(()=>{
-  createWindow();tray=new Tray(nativeImage.createFromPath(path.join(__dirname,"../../assets/character-packs/gemini-star-v1/frames/idle.png")).resize({width:24,height:24}));
-  tray.setToolTip("喵言喵语 · Antigravity");tray.on("double-click",recall);updateMenu();
+  createWindow();
+  if(!noTray){tray=new Tray(nativeImage.createFromPath(path.join(__dirname,"../../assets/character-packs/gemini-star-v1/frames/idle.png")).resize({width:24,height:24}));tray.setToolTip("喵言喵语 · Antigravity");tray.on("double-click",recall);updateMenu();}
   globalShortcut.register("CommandOrControl+Alt+G",recall);globalShortcut.register("CommandOrControl+Alt+Shift+G",()=>{apply({clickThrough:false});recall();});
   if(settings.get("hostWindowOnly"))foreground.start(win?.getNativeWindowHandle());
   audio.setEnabled(settings.get("sound"));audio.setVolume(settings.get("volume"));audio.setPreset(settings.get("soundSet"));adapter.start();quotaAdapter.start();
@@ -217,7 +219,7 @@ else{
   screen.on("display-metrics-changed",()=>{if(settings.get("hostWindowOnly")){syncVisibility();publish();}});
  });
  app.on("before-quit",()=>{quitting=true;clearInterval(visualTimer);clearInterval(uptimeCheckTimer);clearInterval(recoveryTimer);clearInterval(dragTimer);foreground.stop();adapter.stop();quotaAdapter.stop();sm.destroy();clearTimeout(saveTimer);ledger.save();globalShortcut.unregisterAll();tray?.destroy();});
- app.on("window-all-closed",()=>{if(!tray)app.quit();});
+ app.on("window-all-closed",()=>{if(!tray&&!noTray)app.quit();});
 }
 
 

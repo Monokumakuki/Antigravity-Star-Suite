@@ -114,10 +114,21 @@ npm run verify:runtime
 
 ```text
 Antigravity-Cat-Widget/   桌宠、气泡、额度与数值日志适配器
-Antigravity-Dream-Skin/   控制面板、壁纸与可撤回宿主样式
+Antigravity-Dream-Skin/   控制面板、动态壁纸（支持本地 MP4 / 图片）与可撤回宿主样式
+Antigravity-Plugin/       Antigravity 2.x 原生插件（Sidecar 托管桌宠 + 侧栏壁纸控制台）
 shared/                  本地 CDP、持久化与第三方 ws
-tools/                   启动、原生编译与隔离验证
+tools/                   启动、原生编译、插件安装与隔离验证
 ```
+
+## Antigravity 原生插件模式与 MP4 动态壁纸
+
+现在支持以 Antigravity 原生插件形态运行，随宿主启动且不修改 Antigravity 安装目录与桌面快捷方式，自动更新不掉配置；织梦皮肤同时支持选择本地 `.mp4` / `.webm` 视频与 `.png` / `.jpg` / `.webp` / `.gif` 图片作为工作台背景：
+
+```powershell
+npm run install:plugin
+```
+
+详细说明见 [Antigravity-Plugin/README.md](Antigravity-Plugin/README.md)。
 
 已知边界：后台额度使用未公开内部接口，可能随版本失配；没有云端计费；没有完成 codex-maid 的全部聊天、持久记忆、多账号、预测与管理功能。Windows 原生窗口跟随已在开发机器验证，所有 DPI、多屏、虚拟桌面及数小时稳定性仍需更多反馈。欢迎通过 Issues 附上版本、重现步骤与脱敏截图。
 

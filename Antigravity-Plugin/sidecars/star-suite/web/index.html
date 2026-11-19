@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>星语 &amp; 织梦皮肤</title>
+  <script src="./preload.js"></script>
+  <link rel="stylesheet" href="./styles.css?v=3">
+  <script defer src="./app.js?v=3"></script>
+</head>
+<body>
+  <div class="ss-shell">
+    <!-- 顶部状态与总控胶囊 -->
+    <header class="ss-header ss-glass-card">
+      <div class="ss-brand">
+        <div class="ss-badge" aria-hidden="true">✦</div>
+        <div class="ss-brand-text">
+          <h1>星语 · Dream Skin</h1>
+          <div class="ss-status-line">
+            <span class="ss-status-chip" id="chipHostStatus">
+              <i class="ss-dot" id="hostDot"></i>
+              <span id="hostStatusLabel">连接中…</span>
+            </span>
+            <span class="ss-status-chip" id="chipWidgetStatus">
+              <i class="ss-dot" id="widgetDot"></i>
+              <span id="widgetStatusLabel">桌宠检测中</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ss-header-actions">
+        <label class="ss-master-switch" title="启用或关闭 Antigravity 宿主皮肤与玻璃效果">
+          <input type="checkbox" id="chkSkinEnabled">
+          <span class="ss-switch-track" aria-hidden="true"></span>
+          <span class="ss-switch-text">皮肤</span>
+        </label>
+        <button type="button" class="ss-icon-btn" id="btnRefresh" title="立即重新连接并刷新状态" aria-label="刷新状态">
+          ↻
+        </button>
+      </div>
+    </header>
+
+    <div class="ss-banner ss-banner-error hidden" id="errorBanner" role="alert"></div>
+
+    <!-- 分区导航 -->
+    <nav class="ss-tabs ss-glass-control" role="tablist" aria-label="功能分区">
+      <button type="button" class="ss-tab active" role="tab" aria-selected="true" data-tab="wallpaper">织梦壁纸</button>
+      <button type="button" class="ss-tab" role="tab" aria-selected="false" data-tab="glass">液态玻璃</button>
+      <button type="button" class="ss-tab" role="tab" aria-selected="false" data-tab="font">字体颜色</button>
+      <button type="button" class="ss-tab" role="tab" aria-selected="false" data-tab="widget">星语桌宠</button>
+    </nav>
+
+    <!-- Tab 1: 织梦壁纸与 MP4 -->
+    <section class="ss-panel" data-panel="wallpaper">
+      <div class="ss-card ss-glass-card">
+        <div class="ss-row">
+          <div class="ss-who">
+            <div class="ss-name">当前背景素材</div>
+            <div class="ss-sub" id="activeMediaName">Gemini 角色立绘预设</div>
+          </div>
+          <span class="ss-tag" id="activeMediaBadge">内置预设</span>
+        </div>
+
+        <div class="ss-btn-row">
+          <button type="button" class="ss-btn ss-btn-primary" id="btnPickMedia">选择本地 MP4 / 图片</button>
+          <button type="button" class="ss-btn" id="btnSelectPreset">恢复内置预设</button>
+        </div>
+
+        <form class="ss-path-form" id="pathForm">
+          <input
+            type="text"
+            id="inputMediaPath"
+            class="ss-input"
+            placeholder="粘贴本地 .mp4 / .webm / .png / .jpg 路径..."
+            spellcheck="false"
+            autocomplete="off"
+          >
+          <button type="submit" class="ss-btn">应用</button>
+        </form>
+
+        <div class="ss-recent hidden" id="recentWrap">
+          <div class="ss-faint-label">最近使用</div>
+          <div class="ss-chip-list" id="recentList"></div>
+        </div>
+      </div>
+
+      <div class="ss-card ss-glass-card hidden" id="videoControls">
+        <div class="ss-row">
+          <div class="ss-who">
+            <div class="ss-name">视频播放控制</div>
+            <div class="ss-sub">本机回环缓存直出，预览定格首帧零额外解码</div>
+          </div>
+        </div>
+        <div class="ss-inline-controls">
+          <label class="ss-check">
+            <input type="checkbox" id="chkVideoMuted">
+            <span>静音循环</span>
+          </label>
+          <label class="ss-check" title="播放动态壁纸时优化全屏玻璃模糊合成，提升 4K 60fps 流畅度">
+            <input type="checkbox" id="chkVideoSmoothMode">
+            <span>流畅护航</span>
+          </label>
+          <button type="button" class="ss-btn ss-btn-sm" id="btnVideoPause">暂停</button>
+          <label class="ss-select-wrap">
+            <span>倍速</span>
+            <select id="selPlaybackRate" class="ss-select">
+              <option value="0.5">0.5x</option>
+              <option value="0.75">0.75x</option>
+              <option value="1">1.0x</option>
+              <option value="1.25">1.25x</option>
+              <option value="1.5">1.5x</option>
+              <option value="2">2.0x</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div class="ss-card ss-glass-card">
+        <div class="ss-stage" id="previewStage" title="拖动预览图调整背景显示焦点">
+          <img id="previewImg" class="ss-stage-media hidden" alt="壁纸预览" draggable="false">
+          <video id="previewVideo" class="ss-stage-media hidden" muted playsinline preload="metadata"></video>
+          <div class="ss-stage-scrim" id="previewScrim"></div>
+          <div class="ss-stage-hint">拖动调整背景焦点</div>
+        </div>
+
+        <div class="ss-row">
+          <div class="ss-who">
+            <div class="ss-name">阅读区排版</div>
+            <div class="ss-sub">控制对话内容是否附带磨砂底卡</div>
+          </div>
+          <div class="ss-segs" role="group" aria-label="显示模式">
+            <button type="button" class="ss-seg" data-output-mode="transparent">全透明</button>
+            <button type="button" class="ss-seg" data-output-mode="glass">分段玻璃</button>
+          </div>
+        </div>
+
+        <div class="ss-row">
+          <div class="ss-who">
+            <div class="ss-name">画面适配</div>
+          </div>
+          <div class="ss-segs" role="group" aria-label="填充模式">
+            <button type="button" class="ss-seg" data-fit="adaptive">自适应</button>
+            <button type="button" class="ss-seg" data-fit="cover">铺满</button>
+            <button type="button" class="ss-seg" data-fit="contain">完整</button>
+          </div>
+        </div>
+
+        <div class="ss-row">
+          <div class="ss-who">
+            <div class="ss-name">对话栏宽度</div>
+            <div class="ss-sub">亦可直接在主界面输入框左右边缘拖动拉宽（双击还原）</div>
+          </div>
+          <div class="ss-segs" role="group" aria-label="对话栏预设宽度">
+            <button type="button" class="ss-seg" data-chat-width="0">官方</button>
+            <button type="button" class="ss-seg" data-chat-width="76">适中</button>
+            <button type="button" class="ss-seg" data-chat-width="94">超宽</button>
+          </div>
+        </div>
+
+        <div class="ss-sliders">
+          <label class="ss-slider-row">
+            <span>对话宽度</span>
+            <input type="range" id="rngChatWidth" min="45" max="100" step="1">
+            <output id="valChatWidth">官方</output>
+          </label>
+          <label class="ss-slider-row">
+            <span>背景可见度</span>
+            <input type="range" id="rngOpacity" min="0" max="100" step="1">
+            <output id="valOpacity">55%</output>
+          </label>
+          <label class="ss-slider-row">
+            <span>局部放大</span>
+            <input type="range" id="rngZoom" min="1" max="2" step="0.05">
+            <output id="valZoom">1.00x</output>
+          </label>
+          <label class="ss-slider-row">
+            <span>暗角遮罩</span>
+            <input type="range" id="rngScrim" min="0" max="60" step="1">
+            <output id="valScrim">12%</output>
+          </label>
+        </div>
+
+        <div class="ss-row-foot">
+          <span class="ss-sub" id="hostStatusDetail">等待宿主连接</span>
+          <button type="button" class="ss-btn ss-btn-sm" id="btnResetCamera">居中复位</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 2: 液态玻璃 (参考图三 & Magpie 2.4.5+) -->
+    <section class="ss-panel hidden" data-panel="glass">
+      <div class="ss-card ss-glass-card">
+        <div class="ss-row">
+          <div class="ss-who">
+            <div class="ss-name">主题基底</div>
+            <div class="ss-sub">星语紫夜保留原版星空光晕；纯净官方仅叠加纯净液态玻璃</div>
+          </div>
+          <div class="ss-segs" id="themeStyleSegs" role="group" aria-label="主题基底">
+            <button type="button" class="ss-seg" data-theme-style="star-neko">星语紫夜</button>
+            <button type="button" class="ss-seg" data-theme-style="official">纯净官方</button>
+          </div>
+        </div>
+
+        <div class="ss-row">
+          <div class="ss-who">
+            <div class="ss-name">液态玻璃预设</div>
+            <div class="ss-sub">接管官方 glass / card / sidebar 与斜杠清单浮层</div>
+          </div>
+          <div class="ss-segs" id="glassPresetSegs" role="group" aria-label="液态玻璃预设">
+            <button type="button" class="ss-seg" data-glass-preset="off">关闭</button>
+            <button type="button" class="ss-seg" data-glass-preset="light">轻透</button>
+            <button type="button" class="ss-seg" data-glass-preset="balanced">均衡</button>
+            <button type="button" class="ss-seg" data-glass-preset="clear">通透</button>
+          </div>
+        </div>
+
+        <div class="ss-row">
+          <div class="ss-who">
+            <div class="ss-name">玻璃颜色</div>
+            <div class="ss-sub">所有玻璃层的染色基底（不影响强调色）</div>
+          </div>
+          <div class="ss-color-actions" id="glassColorPick"></div>
+        </div>
+
+        <div id="glassRegionList" class="ss-list"></div>
+
+        <div class="ss-row">
+          <div class="ss-who">
+            <div class="ss-name">底图遮挡与圆角</div>
+            <div class="ss-sub">遮挡 0% 跟随壁纸暗角；同心圆角同步作用于卡片、按钮与清单</div>
+          </div>
+          <div class="ss-dual-sliders">
+            <label class="ss-mini-slider">
+              <span>遮挡</span>
+              <input type="range" id="rngGlassVeil" min="0" max="95" step="1">
+              <output id="valGlassVeil">自动</output>
+            </label>
+            <label class="ss-mini-slider">
+              <span>圆角</span>
+              <input type="range" id="rngGlassRadius" min="8" max="24" step="1">
+              <output id="valGlassRadius">16px</output>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- 实时效果预览：斜杠清单液态玻璃效果示意 -->
+      <div class="ss-card ss-glass-card">
+        <div class="ss-sub-head-inline">
+          <span class="ss-name">斜杠清单玻璃浮层实时预览</span>
+          <span class="ss-sub">已修复透明文字穿底问题</span>
+        </div>
+        <div class="ss-slash-preview" id="slashPreview">
+          <div class="ss-slash-item selected">
+            <span class="ss-slash-cmd">/compact</span>
+            <span class="ss-slash-desc">Compact the conversation now…</span>
+            <span class="ss-slash-badge">SYSTEM</span>
+          </div>
+          <div class="ss-slash-item">
+            <span class="ss-slash-cmd">/btw</span>
+            <span class="ss-slash-desc">提出快速疑问，不打断主对话流程</span>
+            <span class="ss-slash-badge">BUILTIN</span>
+          </div>
+          <div class="ss-slash-item">
+            <span class="ss-slash-cmd">/grill-me</span>
+            <span class="ss-slash-desc">通过交互式提问访谈对齐方案</span>
+            <span class="ss-slash-badge">SKILL</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 3: 字体颜色 (参考图三，直接接管官方变量) -->
+    <section class="ss-panel hidden" data-panel="font">
+      <div class="ss-card ss-glass-card">
+        <div class="ss-row">
+          <div class="ss-who">
+            <div class="ss-name">强调色</div>
+            <div class="ss-sub">接管官方 primary / accent / link 高亮色彩</div>
+          </div>
+          <div class="ss-color-actions" id="fontAccentPick"></div>
+        </div>
+
+        <div class="ss-row">
+          <div class="ss-who">
+            <div class="ss-name">深色单独设置</div>
+            <div class="ss-sub">开启后可为深色主题独立指定各层字体色值</div>
+          </div>
+          <div class="ss-segs" id="fontDarkToggle" role="group" aria-label="深色单独设置">
+            <button type="button" class="ss-seg" data-dark-sep="false">关闭</button>
+            <button type="button" class="ss-seg" data-dark-sep="true">开启</button>
+          </div>
+        </div>
+
+        <div id="fontRoleList" class="ss-list"></div>
+      </div>
+    </section>
+
+    <!-- Tab 4: 星语桌宠托管与完整设置 (取代系统托盘外显) -->
+    <section class="ss-panel hidden" data-panel="widget">
+      <div class="ss-card ss-glass-card">
+        <div class="ss-row">
+          <div class="ss-who">
+            <div class="ss-name">星语猫娘桌宠托管</div>
+            <div class="ss-sub" id="widgetPathDesc">等待检测 StarWidget.exe</div>
+          </div>
+          <span class="ss-tag" id="widgetTag">检测中</span>
+        </div>
+
+        <div class="ss-btn-row">
+          <button type="button" class="ss-btn ss-btn-primary" id="btnWidgetRecall">唤起桌宠</button>
+          <button type="button" class="ss-btn" id="btnWidgetRestart">应用 / 重启</button>
+          <button type="button" class="ss-btn ss-btn-danger" id="btnWidgetQuit">退出桌宠</button>
+        </div>
+
+        <div class="ss-list">
+          <div class="ss-row">
+            <div class="ss-who">
+              <div class="ss-name">隐藏系统托盘图标</div>
+              <div class="ss-sub">不在 Windows 任务栏托盘外显，全部设置留在 Antigravity 内</div>
+            </div>
+            <input type="checkbox" class="ss-toggle-chk" id="chkWidgetHideTray">
+          </div>
+          <div class="ss-row">
+            <div class="ss-who">
+              <div class="ss-name">随 Antigravity 启动自动唤起</div>
+              <div class="ss-sub">插件就绪时以无托盘后台模式自动拉起桌宠</div>
+            </div>
+            <input type="checkbox" class="ss-toggle-chk" id="chkWidgetAutoLaunch">
+          </div>
+        </div>
+      </div>
+
+      <div class="ss-card ss-glass-card">
+        <div class="ss-list">
+          <div class="ss-row">
+            <div class="ss-who">
+              <div class="ss-name">仅在 Antigravity 窗口内显示</div>
+              <div class="ss-sub">随宿主前后台与最小化状态自动显隐，不遮挡其它应用</div>
+            </div>
+            <input type="checkbox" class="ss-toggle-chk" data-wkey="hostWindowOnly">
+          </div>
+          <div class="ss-row">
+            <div class="ss-who">
+              <div class="ss-name">桌面模式始终置顶</div>
+              <div class="ss-sub">仅在关闭「仅窗口内显示」后生效</div>
+            </div>
+            <input type="checkbox" class="ss-toggle-chk" data-wkey="alwaysOnTop">
+          </div>
+          <div class="ss-row">
+            <div class="ss-who">
+              <div class="ss-name">鼠标穿透</div>
+              <div class="ss-sub">快捷键 Ctrl+Alt+Shift+G 可随时恢复点击</div>
+            </div>
+            <input type="checkbox" class="ss-toggle-chk" data-wkey="clickThrough">
+          </div>
+          <div class="ss-row">
+            <div class="ss-who">
+              <div class="ss-name">边缘吸附</div>
+            </div>
+            <input type="checkbox" class="ss-toggle-chk" data-wkey="snap">
+          </div>
+          <div class="ss-row">
+            <div class="ss-who">
+              <div class="ss-name">减少动态</div>
+            </div>
+            <input type="checkbox" class="ss-toggle-chk" data-wkey="reducedMotion">
+          </div>
+          <div class="ss-row">
+            <div class="ss-who">
+              <div class="ss-name">角色大小</div>
+            </div>
+            <div class="ss-dual-sliders">
+              <label class="ss-mini-slider">
+                <input type="range" id="rngWidgetScale" min="140" max="360" step="10">
+                <output id="valWidgetScale">220px</output>
+              </label>
+            </div>
+          </div>
+          <div class="ss-row">
+            <div class="ss-who">
+              <div class="ss-name">快速停靠</div>
+            </div>
+            <div class="ss-btn-row compact">
+              <button type="button" class="ss-btn ss-btn-sm" id="btnDockLeft">左下角</button>
+              <button type="button" class="ss-btn ss-btn-sm" id="btnDockRight">右下角</button>
+              <button type="button" class="ss-btn ss-btn-sm" id="btnDockReset">重置位置</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ss-card ss-glass-card">
+        <div class="ss-list">
+          <div class="ss-row">
+            <div class="ss-who">
+              <div class="ss-name">显示气泡</div>
+              <div class="ss-sub">展示额度余量、用量账本与喵言喵语</div>
+            </div>
+            <input type="checkbox" class="ss-toggle-chk" data-wkey="bubbleOn">
+          </div>
+          <div class="ss-row">
+            <div class="ss-who">
+              <div class="ss-name">回合用量提示</div>
+            </div>
+            <input type="checkbox" class="ss-toggle-chk" data-wkey="turnCostOn">
+          </div>
+          <div class="ss-row">
+            <div class="ss-who">
+              <div class="ss-name">猫娘随机彩蛋</div>
+            </div>
+            <input type="checkbox" class="ss-toggle-chk" data-wkey="easterEggs">
+          </div>
+          <div class="ss-row">
+            <div class="ss-who">
+              <div class="ss-name">原声音效</div>
+            </div>
+            <input type="checkbox" class="ss-toggle-chk" data-wkey="sound">
+          </div>
+          <div class="ss-row">
+            <div class="ss-who">
+              <div class="ss-name">音色风格</div>
+            </div>
+            <select id="selWidgetSoundSet" class="ss-select">
+              <option value="bubble-pop">泡泡清脆</option>
+              <option value="wood-tap">木鱼轻敲</option>
+              <option value="soft-spring">轻弹泉水</option>
+              <option value="original">默认原声</option>
+            </select>
+          </div>
+          <div class="ss-row">
+            <div class="ss-who">
+              <div class="ss-name">音效音量</div>
+            </div>
+            <div class="ss-dual-sliders">
+              <label class="ss-mini-slider">
+                <input type="range" id="rngWidgetVolume" min="0" max="100" step="1">
+                <output id="valWidgetVolume">35%</output>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

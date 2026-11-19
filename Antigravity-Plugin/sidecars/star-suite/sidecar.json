@@ -1,0 +1,20 @@
+{
+  "command": "node",
+  "args": [
+    "main.mjs"
+  ],
+  "restart_policy": "always",
+  "display_name": "星语桌宠 & 织梦皮肤",
+  "description": "自动托管星语猫娘桌宠并应用织梦动态壁纸皮肤（支持 MP4 视频与自定义图片）",
+  "has_web_ui": true,
+  "ui_config": {
+    "display_name": "星语 & 织梦皮肤",
+    "views": [
+      {
+        "path": "/",
+        "entrypoint": "SIDECAR_UI_ENTRYPOINT_AUX_PANE",
+        "title": "星语 & 织梦皮肤"
+      }
+    ]
+  }
+}

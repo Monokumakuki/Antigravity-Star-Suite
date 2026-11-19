@@ -6,7 +6,8 @@
   "scripts": {
     "start:widget": "node tools/launch.cjs widget",
     "start:skin": "node tools/launch.cjs skin",
-    "test": "node --test Antigravity-Cat-Widget/test/runtime.test.cjs Antigravity-Dream-Skin/test/runtime.test.cjs tools/source-hashes.test.cjs Antigravity-Cat-Widget/test/personality.test.cjs Antigravity-Cat-Widget/test/quota-cache.test.cjs",
+    "test": "node --test Antigravity-Cat-Widget/test/runtime.test.cjs Antigravity-Dream-Skin/test/runtime.test.cjs Antigravity-Plugin/tests/plugin.test.cjs tools/source-hashes.test.cjs Antigravity-Cat-Widget/test/personality.test.cjs Antigravity-Cat-Widget/test/quota-cache.test.cjs",
+    "install:plugin": "node tools/install-plugin.mjs",
     "verify:runtime": "node tools/verify-runtime.cjs",
     "build:native": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-native.ps1",
     "build:installers": "node tools/build-installers.cjs",
